@@ -1,0 +1,4 @@
+pytest
+black
+typer>=0.12
+

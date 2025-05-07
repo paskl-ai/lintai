@@ -1,0 +1,45 @@
+# Python virtualenvs
+.env
+.venv
+env/
+venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.so
+
+# Editor / tooling
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Packaging
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Coverage / test
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+.stestr/
+.cache/
+pytest_cache/
+
+# Docs
+doc/build/
+*.log
+
+# Misc
+*.bak
+*.tmp
+*.orig
+*.rej
+*.patch
+
