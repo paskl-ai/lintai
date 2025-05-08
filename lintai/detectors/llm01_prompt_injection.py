@@ -4,6 +4,8 @@ from lintai.core.finding import Finding
 
 @register("LLM01")
 def detect_prompt_injection(unit: SourceUnit):
+    print(">>> Running OWASP LLM01 detector")
+
     for fstr in unit.joined_fstrings():
         if unit.is_user_tainted(fstr) and not unit.has_call("sanitize", fstr):
             yield Finding(

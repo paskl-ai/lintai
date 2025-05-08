@@ -3,15 +3,16 @@ from pathlib import Path
 import typer
 from lintai.core.loader import load_plugins
 from lintai.detectors import run_all
-from lintai.detectors.base import SourceUnit
+from lintai.engine.python_ast_unit import PythonASTUnit
 
 # Top-level app
 app = typer.Typer(help="Lintai – shift-left LLM security scanner")
 
-class DummyUnit(SourceUnit):
-    def joined_fstrings(self): return []
-    def is_user_tainted(self, node): return False
-    def has_call(self, name, node): return False
+def _iter_python_files(root: Path):
+    if root.is_file() and root.suffix == ".py":
+        yield root
+    for p in root.rglob("*.py"):
+        yield p
 
 # Define the scan subcommand
 @app.command("scan")
@@ -33,8 +34,16 @@ def scan_command(
         typer.echo(f"Scanning {path} with ruleset: {ruleset or 'default'}")
     
     load_plugins()
-    unit = DummyUnit(path)
-    findings = run_all(unit)
+    if not path.exists():
+        typer.echo(f"Path {path} does not exist.")
+        raise typer.Exit(1)
+    
+    findings = []
+    for file_path in _iter_python_files(path):
+        text = file_path.read_text(encoding="utf-8")
+        unit = PythonASTUnit(file_path, text)
+        findings.extend(run_all(unit))
+        findings = run_all(unit)
     
     if ruleset:
         typer.echo(f"Using custom ruleset: {ruleset}")

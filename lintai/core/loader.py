@@ -1,5 +1,27 @@
+"""
+Plugin loader for lintai.
+
+External packages can expose detectors by declaring in their
+pyproject.toml / setup.cfg:
+
+[project.entry-points."lintai.detectors"]
+my_rules = "my_pkg.my_module"
+"""
+
 from importlib.metadata import entry_points
 
-def load_plugins(group: str = "lintai.plugins"):
+# group name is a constant; keep identical across ecosystem
+_EP_GROUP = "lintai.detectors"
+
+def load_plugins(group: str = _EP_GROUP):
+    """
+    Import every entry‑point in *lintai.detectors*.
+    External modules can then use @lintai.detectors.register(...)
+    exactly like built‑ins.
+    """
     for ep in entry_points(group=group):
-        ep.load()
+        try:
+            ep.load()                    # import side‑effect
+            print(f"[lintai] plugin loaded: {ep.value}")
+        except Exception as exc:
+            print(f"[lintai] failed to load plugin {ep.name}: {exc}")

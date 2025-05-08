@@ -6,6 +6,8 @@ SINK_FUNCS = {"eval", "exec", "subprocess.call", "os.system"}
 
 @register("LLM02")
 def detect_insecure_output(unit: SourceUnit):
+    print(">>> Running OWASP LLM02 detector")
+
     for call in getattr(unit, "calls", lambda: [])():
         if getattr(call, "full_name", "") in SINK_FUNCS and getattr(unit, "is_model_response", lambda x: False)(call.argument(0)):
             yield Finding(
