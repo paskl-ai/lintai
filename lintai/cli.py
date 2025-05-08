@@ -64,7 +64,6 @@ def scan_command(
     for file_path in _iter_python_files(path):
         text = file_path.read_text(encoding="utf-8")
         unit = PythonASTUnit(file_path, text)
-        findings.extend(run_all(unit))
         findings = run_all(unit)
 
     if ruleset:
