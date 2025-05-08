@@ -5,6 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @register("LLM01")
 def detect_prompt_injection(unit: SourceUnit):
     logger.debug(">>> Running OWASP LLM01 detector")
@@ -18,5 +19,5 @@ def detect_prompt_injection(unit: SourceUnit):
                 message="User‑tainted f‑string used in LLM prompt without sanitisation",
                 location=unit.path,
                 line=getattr(fstr, "lineno", None),
-                fix="Wrap variable in sanitize() or escape()"
+                fix="Wrap variable in sanitize() or escape()",
             )

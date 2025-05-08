@@ -6,6 +6,7 @@ It:
 •  Exposes helper methods detectors need today.
 •  Is intentionally simple – improve taint‑tracking heuristics over time.
 """
+
 from __future__ import annotations
 import ast
 from pathlib import Path
@@ -18,7 +19,9 @@ class PythonASTUnit(SourceUnit):
     def __init__(self, path: Path, text: str):
         super().__init__(path)
         self.tree = ast.parse(text, filename=str(path))
-        self._calls: List[ast.Call] = [n for n in ast.walk(self.tree) if isinstance(n, ast.Call)]
+        self._calls: List[ast.Call] = [
+            n for n in ast.walk(self.tree) if isinstance(n, ast.Call)
+        ]
 
     # --------------------------------------------------------------------- #
     # utilities detectors use today                                         #
@@ -64,7 +67,7 @@ class PythonASTUnit(SourceUnit):
         return False
 
     # placeholder – required by LLM02 detector
-    def is_model_response(self, arg: ast.AST) -> bool:       # noqa: D401
+    def is_model_response(self, arg: ast.AST) -> bool:  # noqa: D401
         """Return True if *arg* is obviously an LLM completion response (heuristic)."""
         if isinstance(arg, ast.Call):
             return _attr_to_str(arg.func).endswith("ChatCompletion.create")
@@ -83,4 +86,3 @@ def _attr_to_str(node: ast.AST) -> str:
     if isinstance(node, ast.Name):
         parts.append(node.id)
     return ".".join(reversed(parts))
-

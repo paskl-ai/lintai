@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # group name is a constant; keep identical across ecosystem
 _EP_GROUP = "lintai.detectors"
 
+
 def load_plugins(group: str = _EP_GROUP):
     """
     Import every entry‑point in *lintai.detectors*.
@@ -24,7 +25,7 @@ def load_plugins(group: str = _EP_GROUP):
     """
     for ep in entry_points(group=group):
         try:
-            ep.load()                    # import side‑effect
+            ep.load()  # import side‑effect
             logger.debug(f"[lintai] plugin loaded: {ep.value}")
         except Exception as exc:
             logger.error(f"[lintai] failed to load plugin {ep.name}: {exc}")
