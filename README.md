@@ -2,6 +2,10 @@
 
 **Lintai** is an experimental, modular, and extensible static analysis tool focused on detecting **LLM-specific security issues** in source code. It is designed to help developers and security engineers **shift left** on AI safety by scanning for dangerous patterns in code that integrates or wraps large language models (LLMs) like OpenAI's GPT.
 
+## 🤔 Why Lintai?
+
+Large language model (LLM) apps often introduce new classes of vulnerabilities: prompt injection, insecure output execution, data leakage, and more. Traditional static analysis tools don’t catch these. **Lintai** fills that gap — offering LLM-aware static analysis so you can detect issues before they reach production.
+
 ## ✨ Features
 
 - ⚙️ Modular detector registry (easily add new rules)
