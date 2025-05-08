@@ -12,6 +12,10 @@ from typing import Callable, Dict, List
 
 from lintai.detectors.base import SourceUnit       # local import is fine
 from lintai.core.finding import Finding
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # --------------------------------------------------------------------------- #
 # 1. public registry & decorator                                              #
@@ -63,6 +67,6 @@ def run_all(unit: SourceUnit) -> List[Finding]:
             try:
                 findings.extend(fn(unit))
             except Exception as exc:         # keep one bad detector from killing scan
-                print(f"[lintai] detector {fn.__module__}:{fn.__name__} crashed: {exc}")
+                logger.error(f"[lintai] detector {fn.__module__}:{fn.__name__} crashed: {exc}")
 
     return findings
