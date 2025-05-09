@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 SINK_FUNCS = {"eval", "exec", "subprocess.call", "os.system"}
 
 
-@register("LLM02")
+@register("LLM02", scope="module")
 def detect_insecure_output(unit: SourceUnit):
     logger.debug(">>> Running OWASP LLM02 detector")
 

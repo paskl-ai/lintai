@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@register("LLM01")
+@register("LLM01", scope="module")
 def detect_prompt_injection(unit: SourceUnit):
     logger.debug(">>> Running OWASP LLM01 detector")
 
