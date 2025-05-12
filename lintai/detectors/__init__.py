@@ -10,7 +10,6 @@ import importlib
 import pkgutil
 import sys
 from typing import Callable, Dict, List
-import itertools
 
 from lintai.engine.visitor import _DispatchVisitor
 from lintai.detectors.base import SourceUnit  # local import is fine
@@ -32,7 +31,8 @@ def register(rule_id: str, *, scope: str = "module", node_types=()):
     node_types: tuple of ast.* classes, only for scope="node"
     """
     def _decorator(fn):
-        fn._lintai_scope = scope          # <──  NEW
+        fn._lintai_rule_id   = rule_id
+        fn._lintai_scope = scope
         fn._lintai_node_types = node_types
         _REGISTRY.setdefault(rule_id, []).append(fn)
         return fn
@@ -65,8 +65,9 @@ def _discover_builtin():
 # 3. public API: run all detectors                                            #
 # --------------------------------------------------------------------------- #
 def run_all(unit: SourceUnit) -> List[Finding]:
+    from lintai.engine.visitor import _DispatchVisitor  # deferred import
+ 
     _discover_builtin()
-    from lintai.engine.visitor import _DispatchVisitor   # <── moved inside
     detectors = [d for lst in _REGISTRY.values() for d in lst]
     visitor = _DispatchVisitor(unit, detectors)
     visitor.visit(unit.tree)

@@ -5,8 +5,9 @@ import typer
 from lintai.core.loader import load_plugins
 from lintai.detectors import run_all
 from lintai.engine.python_ast_unit import PythonASTUnit
+from lintai.dsl.loader import load_rules
 
-# Top-level app
+# Top-level app for Lintai CLI
 app = typer.Typer(help="Lintai – shift-left LLM security scanner")
 
 logging.basicConfig(
@@ -32,9 +33,9 @@ def set_log_level(verbose: bool):
 # Define the scan subcommand
 @app.command("scan")
 def scan_command(
-    path: Path = typer.Argument(..., help="Path to scan."),  # Make path required
+    path: Path = typer.Argument(..., help="Path to scan."),
     ruleset: str = typer.Option(
-        None, "-r", "--ruleset", help="Specify custom ruleset to apply."
+        None, "-r", "--ruleset", help="Specify path to custom ruleset"
     ),
     verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable verbose mode."),
     version: bool = typer.Option(False, "--version", help="Show version and exit."),
@@ -58,6 +59,10 @@ def scan_command(
         typer.echo(f"Path {path} does not exist.")
         raise typer.Exit(1)
 
+    if ruleset:
+        typer.echo(f"Loading custom ruleset from {ruleset}")
+        load_rules(ruleset)
+
     findings = []
     logger.info("Scanning started.")
 
@@ -65,9 +70,6 @@ def scan_command(
         text = file_path.read_text(encoding="utf-8")
         unit = PythonASTUnit(file_path, text)
         findings = run_all(unit)
-
-    if ruleset:
-        typer.echo(f"Using custom ruleset: {ruleset}")
 
     typer.echo(json.dumps([f.to_dict() for f in findings], indent=2))
     raise typer.Exit(1 if any(f.severity == "blocker" for f in findings) else 0)

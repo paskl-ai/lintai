@@ -35,18 +35,20 @@ class _DispatchVisitor(ast.NodeVisitor):
     def visit_Module(self, node):
         self.unit._current = node
         for fn in self.module_detectors:
-            try:
-                self.findings.extend(fn(self.unit))
-            except Exception as exc:
-                logger.error("Detector %s crashed: %s", fn.__name__, exc)
+            self._safe_call(fn)
         self.generic_visit(node)
 
     # --- dispatch node‑level detectors ------------------------------------
     def generic_visit(self, node):
         self.unit._current = node
         for fn in self.node_detectors.get(type(node), ()):
-            try:
-                self.findings.extend(fn(self.unit))
-            except Exception as exc:
-                logger.error("Detector %s crashed: %s", fn.__name__, exc)
+            self._safe_call(fn)
         super().generic_visit(node)
+
+    # --- helper for safe calling the detectors -----------------------------
+    def _safe_call(self, fn):
+        try:
+            self.findings.extend(fn(self.unit))
+        except Exception as exc:
+            logger.error("Detector %s crashed: %s", fn.__name__, exc)
+
