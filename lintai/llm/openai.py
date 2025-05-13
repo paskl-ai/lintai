@@ -49,11 +49,12 @@ class _OpenAIClient(LLMClient):
 
     def ask(self, prompt: str, **kw) -> str:  # kw: temperature, max_tokens ...
         try:
-            resp = self.client.chat.completions.create(  # works in both APIs
+            resp = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=kw.get("max_tokens", 256),
                 temperature=kw.get("temperature", 0.2),
+                response_format={"type": "json_object"},
             )
             # object shape differs slightly; normalize
             message = (

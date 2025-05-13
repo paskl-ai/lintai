@@ -1,19 +1,20 @@
 # Lintai
 
-**Lintai** is an experimental, modular, and extensible static analysis tool focused on detecting **LLM-specific security issues** in source code. It is designed to help developers and security engineers **shift left** on AI safety by scanning for dangerous patterns in code that integrates or wraps large language models (LLMs) like OpenAI's GPT.
+**Lintai** is an experimental, modular, and extensible static analysis tool focused on detecting **LLM-specific security issues** in source code. It is designed to help developers and security engineers **shift left** on AI safety by scanning for dangerous patterns in code that integrates or wraps large language models (LLMs) like OpenAI's GPT or Azure OpenAI.
 
 ## 🤔 Why Lintai?
 
-Large language model (LLM) apps often introduce new classes of vulnerabilities: prompt injection, insecure output execution, data leakage, and more. Traditional static analysis tools don’t catch these. **Lintai** fills that gap — offering LLM-aware static analysis so you can detect issues before they reach production.
+Large language model (LLM) apps introduce new classes of vulnerabilities: prompt injection, insecure output handling, data leakage, and more. Traditional static analysis tools don’t catch these. **Lintai** fills that gap — offering LLM-aware static analysis so you can catch AI-related security issues before they reach production.
 
 ## ✨ Features
 
 - ⚙️ Modular detector registry (easily add new rules)
-- 🔍 Detects prompt injection, insecure model output use, and other LLM-specific risks
-- 🧠 Designed for multi-language support (Python first, more to come)
-- 🔌 Plugin-based architecture via [entry points](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/)
+- 🔍 Built-in detectors for prompt injection, insecure model output, and more
+- 🧠 Support for LLM-backed detectors using OpenAI, Azure, Claude, etc.
+- 🧩 DSL-based custom rule support
+- 🔌 Plugin-ready architecture via [`entry_points`](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/)
+- 🧪 Designed with OWASP LLM Top 10 and MITRE ATT&CK alignment
 - 📦 CLI-based, easy to integrate into CI/CD workflows
-- 📄 Designed with OWASP LLM Top 10 and MITRE ATT&CK alignment in mind
 
 ## 🚀 Quickstart
 
@@ -25,35 +26,40 @@ cd lintai
 pip install -e .
 ```
 
-#### Selecting an LLM provider for LLM based detectors
+### 2. Choose an LLM Provider (optional)
 
-Lintai installs with **no heavy LLM SDKs**.  
-Choose a provider and install the matching extra:
+Lintai installs **without any heavy LLM SDKs** by default.
+
+To use LLM-powered detectors (e.g., dynamic code audits using GPT or Claude), install the required provider:
 
 ```bash
-pip install "lintai[openai]"     # OpenAI / Azure OpenAI
-pip install "lintai[anthropic]"  # Claude
+pip install "lintai[openai]"      # For OpenAI or Azure OpenAI
+pip install "lintai[anthropic]"   # For Claude via Anthropic
 ```
 
-### 2. Run a Scan
+See `.env.example` for setting provider-specific environment variables.
+
+### 3. Run a Scan
+
+Basic scan:
 
 ```bash
 lintai scan examples/
 ```
 
-Add `-l DEBUG` for verbose output:
+With debug logs:
 
 ```bash
 lintai scan -l DEBUG examples/
 ```
 
-Specify a custom ruleset:
+With a custom ruleset:
 
 ```bash
 lintai scan -r lintai/dsl/rules examples/
 ```
 
-Specify env file
+With a specific environment file:
 
 ```bash
 lintai scan -e /path/to/prod.env examples/
@@ -61,7 +67,7 @@ lintai scan -e /path/to/prod.env examples/
 
 ## 🧪 Example Output
 
-```
+```json
 [
   {
     "owasp_id": "LLM01",
@@ -75,9 +81,9 @@ lintai scan -e /path/to/prod.env examples/
 ]
 ```
 
-## 🧩 Writing a New Detector
+## 🔍 Writing a New Detector
 
-Add a Python file in `lintai/detectors/`, and register your function:
+Add a Python file in `lintai/detectors/`, and register your detector using the `@register()` decorator:
 
 ```python
 from lintai.detectors import register
@@ -98,35 +104,77 @@ def my_custom_check(unit):
             )
 ```
 
+Or define node-specific detectors with scope:
+
+```python
+@register("LLM88", scope="node", node_types=(ast.Call,))
+def node_level_check(unit):
+    call = unit._current
+    if is_untrusted(call):
+        ...
+```
+
 ## 🛠 Architecture
 
-- `cli.py`: Main entrypoint using [Typer](https://typer.tiangolo.com/)
-- `detectors/`: Contains LLM-specific security rules
-- `engine/python_ast_unit.py`: Parses Python files using `ast` and provides a uniform interface
-- `core/`: Shared logic (finding, loader, reporting)
+- `cli.py`: Typer-based CLI entry point
+- `detectors/`: All rule definitions and LLM security detectors
+- `llm/`: SDK accessors for OpenAI, Azure, Claude, etc.
+- `engine/python_ast_unit.py`: AST parsing and helper methods
+- `core/`: Shared logic for findings, plugin loader, reporting
+- `dsl/`: YAML/JSON-based declarative rules
+
+## 📄 .env Example
+
+A sample environment file for enabling LLM-based detectors:
+
+```dotenv
+###############################################
+#  Lintai – example .env for LLM providers   #
+###############################################
+
+# --- Select provider -----------------------------
+# Options: openai  azure  anthropic/claude  gemini  cohere  dummy
+LINTAI_LLM_PROVIDER=azure
+
+# --- Azure OpenAI -------------------------------
+AZURE_OPENAI_API_KEY=sk-xxxxxxxx
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_VERSION=2025-01-01-preview
+
+# --- OpenAI Shared Settings ----------------------
+OPENAI_MODEL=gpt-4.1-mini  # Model name = deployment name for Azure
+
+# --- Anthropic Claude ----------------------------
+ANTHROPIC_API_KEY=sk-anthropic-xxxx
+
+# --- Google Gemini / PaLM2 -----------------------
+GOOGLE_API_KEY=AIzaSyXXXXXX
+
+# --- Cohere command-R ----------------------------
+COHERE_API_KEY=_cstxxxxx
+```
 
 ## 🎯 Roadmap
 
 - [x] Python AST-based scanner
-- [x] DSL for writing rules
-- [x] OWASP LLM Top 10 coverage (in progress)
-- [ ] Real plugin loading via `entry_points`
-- [ ] Multi-language support (JS/TS, Java, etc.)
-- [ ] CI-ready output formats (SARIF, JSON, etc.)
-- [ ] Web UI and VS Code integration
+- [x] Rule DSL with JSON/YAML support
+- [x] LLM Powered Detectors
+- [x] OWASP LLM Top 10 alignment
+- [ ] LLM fine-tuned detectors (e.g. DeBERTa, Phi)
+- [ ] Multi-language support (JavaScript, Java)
+- [ ] CI-ready output (SARIF)
+- [ ] Web UI and VS Code plugin
 
 ## 🤝 Contributing
 
-Lintai is early-stage and looking for contributors. If you’re excited about AI security and static analysis:
+Lintai is early-stage and growing fast. Contributions welcome!
 
 1. ⭐ Star this repo
-2. Fork it and open a pull request
-3. File an issue or idea under [Issues](https://github.com/paskl-ai/lintai/issues)
+2. Fork and open a PR
+3. File ideas or bugs via [Issues](https://github.com/paskl-ai/lintai/issues)
 
 ## 📄 License
 
 [Apache 2.0](LICENSE)
 
 ---
-
-Original Creator: Harsh Parandekar, [Paskl.ai](https://paskl.ai) to secure the AI developer stack.

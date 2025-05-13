@@ -43,6 +43,7 @@ class _AzureClient(LLMClient):
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=kw.get("max_tokens", 256),
                 temperature=kw.get("temperature", 0.2),
+                response_format={"type": "json_object"},
             )
             return resp.choices[0].message.content
         except Exception as exc:
