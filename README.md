@@ -23,7 +23,7 @@ Large language model (LLM) apps often introduce new classes of vulnerabilities: 
 git clone https://github.com/paskl-ai/lintai.git
 cd lintai
 pip install -e .
-````
+```
 
 ### 2. Run a Scan
 
@@ -31,10 +31,10 @@ pip install -e .
 lintai scan examples/
 ```
 
-Add `-v` for verbose output:
+Add `-l DEBUG` for verbose output:
 
 ```bash
-lintai scan -v examples/
+lintai scan -l DEBUG examples/
 ```
 
 Specify a custom ruleset:
@@ -84,20 +84,20 @@ def my_custom_check(unit):
 
 ## 🛠 Architecture
 
-* `cli.py`: Main entrypoint using [Typer](https://typer.tiangolo.com/)
-* `detectors/`: Contains LLM-specific security rules
-* `engine/python_ast_unit.py`: Parses Python files using `ast` and provides a uniform interface
-* `core/`: Shared logic (finding, loader, reporting)
+- `cli.py`: Main entrypoint using [Typer](https://typer.tiangolo.com/)
+- `detectors/`: Contains LLM-specific security rules
+- `engine/python_ast_unit.py`: Parses Python files using `ast` and provides a uniform interface
+- `core/`: Shared logic (finding, loader, reporting)
 
 ## 🎯 Roadmap
 
-* [x] Python AST-based scanner
-* [x] DSL for writing rules
-* [x] OWASP LLM Top 10 coverage (in progress)
-* [ ] Real plugin loading via `entry_points`
-* [ ] Multi-language support (JS/TS, Java, etc.)
-* [ ] CI-ready output formats (SARIF, JSON, etc.)
-* [ ] Web UI and VS Code integration
+- [x] Python AST-based scanner
+- [x] DSL for writing rules
+- [x] OWASP LLM Top 10 coverage (in progress)
+- [ ] Real plugin loading via `entry_points`
+- [ ] Multi-language support (JS/TS, Java, etc.)
+- [ ] CI-ready output formats (SARIF, JSON, etc.)
+- [ ] Web UI and VS Code integration
 
 ## 🤝 Contributing
 

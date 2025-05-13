@@ -1,5 +1,10 @@
-import json
-import logging
+"""
+CLI entry‑point for Lintai.
+Logs go to stderr; JSON findings go to stdout.
+"""
+
+from __future__ import annotations
+import json, logging
 from pathlib import Path
 import typer
 from lintai.core.loader import load_plugins
@@ -7,95 +12,103 @@ from lintai.detectors import run_all
 from lintai.engine.python_ast_unit import PythonASTUnit
 from lintai.dsl.loader import load_rules
 
-# Top-level app for Lintai CLI
-app = typer.Typer(help="Lintai – shift-left LLM security scanner")
+app = typer.Typer(help="Lintai – shift‑left LLM security scanner")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler()],
-)
+# -----------------------------------------------------------------------------
+# logging config – everything goes to stderr
+# -----------------------------------------------------------------------------
+_DEFAULT_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=_DEFAULT_FMT)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("lintai.cli")
 
 
+# -----------------------------------------------------------------------------
+# helpers
+# -----------------------------------------------------------------------------
 def _iter_python_files(root: Path):
     if root.is_file() and root.suffix == ".py":
         yield root
-    for p in root.rglob("*.py"):
-        yield p
+    else:
+        yield from root.rglob("*.py")
 
 
-def set_log_level(verbose: bool):
-    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
-
-
-# Define the scan subcommand
+# -----------------------------------------------------------------------------
+# scan command
+# -----------------------------------------------------------------------------
 @app.command("scan")
 def scan_command(
-    path: Path = typer.Argument(..., help="Path to scan."),
-    ruleset: str = typer.Option(
-        None, "-r", "--ruleset", help="Specify path to custom ruleset"
-    ),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable verbose mode."),
-    version: bool = typer.Option(False, "--version", help="Show version and exit."),
+    path: Path = typer.Argument(..., help="File or directory to scan"),
+    ruleset: Path | None = typer.Option(None, "--ruleset", "-r", help="Path to YAML/JSON rule file or folder"),
+    log_level: str = typer.Option("INFO", "--log-level", "-l", help="python logging level (INFO, DEBUG, …)"),
+    version: bool = typer.Option(False, "--version", help="Show version and exit"),
 ):
-    """
-    Scan the specified directory or file for LLM-specific security issues.
-    """
     if version:
         from lintai import __version__
-
         typer.echo(f"Lintai {__version__}")
         raise typer.Exit()
 
-    if verbose:
-        typer.echo(f"Scanning {path} with ruleset: {ruleset or 'default'}")
+    # ------------------------------------------------------------------ #
+    # validate inputs & set logging
+    # ------------------------------------------------------------------ #
+    try:
+        logging.getLogger().setLevel(getattr(logging, log_level.upper()))
+    except AttributeError:
+        typer.echo(f"Unknown log‑level '{log_level}'. Expected DEBUG/INFO/WARNING/ERROR.", err=True)
+        raise typer.Exit(2)
 
-    set_log_level(verbose)
+    if not path.exists():
+        typer.echo(f"Path '{path}' does not exist.", err=True)
+        raise typer.Exit(2)
 
     load_plugins()
-    if not path.exists():
-        typer.echo(f"Path {path} does not exist.")
-        raise typer.Exit(1)
 
     if ruleset:
-        typer.echo(f"Loading custom ruleset from {ruleset}")
+        logger.info("Loading custom ruleset from %s", ruleset)
         load_rules(ruleset)
 
-    findings = []
     logger.info("Scanning started.")
 
+    # ------------------------------------------------------------------ #
+    # run detectors
+    # ------------------------------------------------------------------ #
+    all_findings: list = []
+
     for file_path in _iter_python_files(path):
-        text = file_path.read_text(encoding="utf-8")
+        try:
+            text = file_path.read_text(encoding="utf‑8")
+        except UnicodeDecodeError:
+            logger.warning("Skipping non‑utf8 file %s", file_path)
+            continue
+
         unit = PythonASTUnit(file_path, text)
-        findings = run_all(unit)
+        all_findings.extend(run_all(unit))
 
-    typer.echo(json.dumps([f.to_dict() for f in findings], indent=2))
-    raise typer.Exit(1 if any(f.severity == "blocker" for f in findings) else 0)
+    # ------------------------------------------------------------------ #
+    # emit findings JSON to stdout only
+    # ------------------------------------------------------------------ #
+    typer.echo(json.dumps([f.to_dict() for f in all_findings], indent=2))
+
+    exit_code = 1 if any(f.severity == "blocker" for f in all_findings) else 0
+    raise typer.Exit(exit_code)
 
 
-# Placeholder for future commands
+# -----------------------------------------------------------------------------
+# placeholder commands
+# -----------------------------------------------------------------------------
 @app.command("list-ai-use")
 def list_ai_use():
-    """
-    List AI usage across the codebase.
-    """
-    typer.echo("Listing AI usage - functionality to be implemented")
+    """List AI usage across the codebase (todo)."""
+    logger.warning("list-ai-use not implemented yet")
 
 
 @app.command("config")
 def config_command():
-    """
-    Configure Lintai settings.
-    """
-    typer.echo("Configuration utility - functionality to be implemented")
+    """Config utility (todo)."""
+    logger.warning("config command not implemented yet")
 
 
 def main():
-    """
-    Main entry point for the CLI.
-    """
     app()
 
 
