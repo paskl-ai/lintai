@@ -37,10 +37,10 @@ Add `-v` for verbose output:
 lintai scan -v examples/
 ```
 
-Specify a custom ruleset (planned):
+Specify a custom ruleset:
 
 ```bash
-lintai scan -r path/to/ruleset.json examples/
+lintai scan -r lintai/dsl/rules examples/
 ```
 
 ## 🧪 Example Output
@@ -92,6 +92,7 @@ def my_custom_check(unit):
 ## 🎯 Roadmap
 
 * [x] Python AST-based scanner
+* [x] DSL for writing rules
 * [x] OWASP LLM Top 10 coverage (in progress)
 * [ ] Real plugin loading via `entry_points`
 * [ ] Multi-language support (JS/TS, Java, etc.)
