@@ -25,6 +25,16 @@ cd lintai
 pip install -e .
 ```
 
+#### Selecting an LLM provider for LLM based detectors
+
+Lintai installs with **no heavy LLM SDKs**.  
+Choose a provider and install the matching extra:
+
+```bash
+pip install "lintai[openai]"     # OpenAI / Azure OpenAI
+pip install "lintai[anthropic]"  # Claude
+```
+
 ### 2. Run a Scan
 
 ```bash
@@ -41,6 +51,12 @@ Specify a custom ruleset:
 
 ```bash
 lintai scan -r lintai/dsl/rules examples/
+```
+
+Specify env file
+
+```bash
+lintai scan -e /path/to/prod.env examples/
 ```
 
 ## 🧪 Example Output

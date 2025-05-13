@@ -6,5 +6,13 @@ authors = [{ name = "Harsh Parandekar", email = "harsh.parandekar@paskl.ai" }]
 requires-python = ">=3.9"
 dependencies = ["typer>=0.12", "importlib-metadata; python_version<'3.10'"]
 
+[project.optional-dependencies]
+openai      = ["openai>=1.12,<2.0"]
+anthropic   = ["anthropic>=0.21,<1.0"]
+gemini      = ["google-generativeai>=0.5"]
+cohere      = ["cohere>=5.1"]
+# users who want *all* SDKs
+all-llms    = ["lintai[openai,anthropic,gemini,cohere]"]
+
 [project.scripts]
 lintai = "lintai.cli:app"

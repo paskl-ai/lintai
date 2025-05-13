@@ -1,4 +1,4 @@
-import subprocess, json, pathlib
+import subprocess, json, pathlib, os
 import pytest
 
 ROOT = pathlib.Path(__file__).parents[1]
@@ -10,6 +10,7 @@ def test_dsl_rule_hits(tmp_path):
 
     result = subprocess.run(
         ["lintai", "scan", str(tmp_path), "--ruleset", str(ROOT / "lintai/dsl/rules")],
+        env=dict(os.environ, LINTAI_LLM_PROVIDER="dummy"),
         capture_output=True, text=True
     )
 

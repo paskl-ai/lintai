@@ -16,10 +16,17 @@ from lintai.detectors.base import SourceUnit
 
 
 class PythonASTUnit(SourceUnit):
-    __slots__ = ("tree", "_current", "_call_nodes", "_fstring_nodes")
+    __slots__ = (
+        "tree",
+        "source",
+        "_current",
+        "_call_nodes",
+        "_fstring_nodes",
+    )
 
     def __init__(self, path: Path, text: str):
         super().__init__(path)
+        self.source = text
         self.tree = ast.parse(text, filename=str(path))
         self._current = None
         self._call_nodes = None          # lazy build
