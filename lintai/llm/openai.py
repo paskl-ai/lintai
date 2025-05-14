@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json, os, importlib.util, types
+from typing import Any
 from lintai.llm.base import LLMClient
 
 # ------------------------------------------------------------------ #
@@ -19,7 +20,7 @@ _ERROR_JSON = json.dumps(
 # ------------------------------------------------------------------ #
 # 2. Helper: create compatibility client
 # ------------------------------------------------------------------ #
-def _make_client() -> "OpenAICompat":
+def _make_client() -> Any:
     """
     Return an object with `.chat.completions.create` no matter which
     openai‑python major version is installed.
