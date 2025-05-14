@@ -14,6 +14,7 @@ from lintai.detectors.base import SourceUnit
 
 logger = logging.getLogger(__name__)
 
+
 class _DispatchVisitor(ast.NodeVisitor):
     def __init__(self, unit: SourceUnit, detectors: Iterable[Callable]):
         self.unit = unit
@@ -21,7 +22,7 @@ class _DispatchVisitor(ast.NodeVisitor):
 
         # split detectors by declared scope
         self.module_detectors = []
-        self.node_detectors   = defaultdict(list)
+        self.node_detectors = defaultdict(list)
 
         for d in detectors:
             scope = getattr(d, "_lintai_scope", "module")
@@ -51,4 +52,3 @@ class _DispatchVisitor(ast.NodeVisitor):
             self.findings.extend(fn(self.unit))
         except Exception as exc:
             logger.error("Detector %s crashed: %s", fn.__name__, exc)
-

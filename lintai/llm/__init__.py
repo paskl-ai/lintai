@@ -5,16 +5,17 @@ from lintai.llm.base import LLMClient
 
 logger = logging.getLogger(__name__)
 
-_PROVIDERS: Dict[str, str] = {      
+_PROVIDERS: Dict[str, str] = {
     # provider‑id → module path
-    "openai":     "lintai.llm.openai",
-    "azure":      "lintai.llm.azure",
-    "anthropic":  "lintai.llm.anthropic",
-    "claude":     "lintai.llm.anthropic",
-    "gemini":     "lintai.llm.gemini",
-    "cohere":     "lintai.llm.cohere",
-    "dummy":      "lintai.llm.dummy",
+    "openai": "lintai.llm.openai",
+    "azure": "lintai.llm.azure",
+    "anthropic": "lintai.llm.anthropic",
+    "claude": "lintai.llm.anthropic",
+    "gemini": "lintai.llm.gemini",
+    "cohere": "lintai.llm.cohere",
+    "dummy": "lintai.llm.dummy",
 }
+
 
 def get_client() -> LLMClient:
     choice = os.getenv("LINTAI_LLM_PROVIDER", "dummy").lower()
@@ -29,7 +30,7 @@ def get_client() -> LLMClient:
             f"{choice!r} provider chosen but its SDK is missing.\n"
             f"{exc}\nInstall via  ➜   pip install 'lintai[{choice}]'"
         )
-        if "lintai.cli" in sys.modules:       # running in CLI context
+        if "lintai.cli" in sys.modules:  # running in CLI context
             logger.error(msg)
             raise SystemExit(2)
         raise

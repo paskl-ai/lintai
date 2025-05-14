@@ -6,11 +6,14 @@ genai = importlib.util.module_from_spec(_spec) if _spec else None
 if _spec:
     _spec.loader.exec_module(genai)
 
-_ERROR_JSON = json.dumps({
-    "issue": "Gemini provider selected but SDK unavailable",
-    "sev": "info",
-    "fix": "pip install 'lintai[gemini]'",
-})
+_ERROR_JSON = json.dumps(
+    {
+        "issue": "Gemini provider selected but SDK unavailable",
+        "sev": "info",
+        "fix": "pip install 'lintai[gemini]'",
+    }
+)
+
 
 class _GeminiClient(LLMClient):
     def __init__(self):
@@ -26,15 +29,18 @@ class _GeminiClient(LLMClient):
         try:
             resp = self.model.generate_content(
                 prompt,
-                generation_config={"max_output_tokens": kw.get("max_tokens", 256)}
+                generation_config={"max_output_tokens": kw.get("max_tokens", 256)},
             )
             return resp.text
         except Exception as exc:
-            return json.dumps({
-                "issue": f"Gemini error: {exc.__class__.__name__}",
-                "sev": "info",
-                "fix": "Check Google API key or limits",
-            })
+            return json.dumps(
+                {
+                    "issue": f"Gemini error: {exc.__class__.__name__}",
+                    "sev": "info",
+                    "fix": "Check Google API key or limits",
+                }
+            )
+
 
 def create():
     return _GeminiClient()

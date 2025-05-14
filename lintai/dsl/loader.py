@@ -6,7 +6,7 @@ from lintai.detectors.base import SourceUnit
 
 
 def _load_one(rule: dict):
-    nid  = rule["id"]
+    nid = rule["id"]
     scope = rule.get("scope", "module")
     node_types = tuple(getattr(ast, t) for t in rule.get("node_types", []))
 
@@ -25,14 +25,13 @@ def _load_one(rule: dict):
                 if isinstance(v, ast.Constant) and isinstance(v.value, str):
                     parts.append(v.value)
                 elif isinstance(v, ast.FormattedValue):
-                    if isinstance(v.value, ast.Name):          # {variable}
+                    if isinstance(v.value, ast.Name):  # {variable}
                         parts.append("{" + v.value.id + "}")
                     else:
-                        parts.append("{...}")                  # other expression
+                        parts.append("{...}")  # other expression
             return "".join(parts)
 
         return ""
-
 
     # generate detector on‑the‑fly
     @register(nid, scope=scope, node_types=node_types)
@@ -50,6 +49,7 @@ def _load_one(rule: dict):
                 fix=_r.get("fix", ""),
             )
 
+
 def load_rules(path: str | pathlib.Path):
     p = pathlib.Path(path)
     if p.is_dir():
@@ -57,7 +57,11 @@ def load_rules(path: str | pathlib.Path):
     else:
         files = [p]
     for file in files:
-        data = yaml.safe_load(file.read_text()) if file.suffix in {".yml", ".yaml"} else json.loads(file.read_text())
+        data = (
+            yaml.safe_load(file.read_text())
+            if file.suffix in {".yml", ".yaml"}
+            else json.loads(file.read_text())
+        )
         if isinstance(data, list):
             for rule in data:
                 _load_one(rule)

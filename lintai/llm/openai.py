@@ -17,6 +17,7 @@ _ERROR_JSON = json.dumps(
     }
 )
 
+
 # ------------------------------------------------------------------ #
 # 2. Helper: create compatibility client
 # ------------------------------------------------------------------ #
@@ -25,7 +26,7 @@ def _make_client() -> Any:
     Return an object with `.chat.completions.create` no matter which
     openai‑python major version is installed.
     """
-    if not openai:                   # should never happen – caller checks
+    if not openai:  # should never happen – caller checks
         raise ImportError(_ERROR_JSON)
 
     # >=1.0 has OpenAI() class
@@ -35,7 +36,7 @@ def _make_client() -> Any:
         return openai.OpenAI(api_key=key or None, base_url=base or None)
 
     # 0.x – module‑level functions
-    return openai                    # type: ignore[return-value]
+    return openai  # type: ignore[return-value]
 
 
 # ------------------------------------------------------------------ #

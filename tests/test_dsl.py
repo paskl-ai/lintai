@@ -3,6 +3,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).parents[1]
 
+
 def test_dsl_rule_hits(tmp_path):
     code = 'secret = "hunter2"\nprompt = f"My password is {secret}"\n'
     src = tmp_path / "leak.py"
@@ -11,7 +12,8 @@ def test_dsl_rule_hits(tmp_path):
     result = subprocess.run(
         ["lintai", "scan", str(tmp_path), "--ruleset", str(ROOT / "lintai/dsl/rules")],
         env=dict(os.environ, LINTAI_LLM_PROVIDER="dummy"),
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
 
     lines = result.stdout.strip().splitlines()

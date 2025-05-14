@@ -6,11 +6,14 @@ anthropic = importlib.util.module_from_spec(_spec) if _spec else None
 if _spec:
     _spec.loader.exec_module(anthropic)
 
-_ERROR_JSON = json.dumps({
-    "issue": "Anthropic provider selected but SDK unavailable",
-    "sev": "info",
-    "fix": "pip install 'lintai[anthropic]'",
-})
+_ERROR_JSON = json.dumps(
+    {
+        "issue": "Anthropic provider selected but SDK unavailable",
+        "sev": "info",
+        "fix": "pip install 'lintai[anthropic]'",
+    }
+)
+
 
 class _AnthropicClient(LLMClient):
     def __init__(self):
@@ -32,11 +35,14 @@ class _AnthropicClient(LLMClient):
             )
             return resp.content[0].text
         except Exception as exc:
-            return json.dumps({
-                "issue": f"Anthropic error: {exc.__class__.__name__}",
-                "sev": "info",
-                "fix": "Check API key, model, or rate limits",
-            })
+            return json.dumps(
+                {
+                    "issue": f"Anthropic error: {exc.__class__.__name__}",
+                    "sev": "info",
+                    "fix": "Check API key, model, or rate limits",
+                }
+            )
+
 
 def create():
     return _AnthropicClient()

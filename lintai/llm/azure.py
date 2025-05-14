@@ -13,14 +13,15 @@ _ERROR_JSON = json.dumps(
     }
 )
 
+
 class _AzureClient(LLMClient):
     def __init__(self):
         if openai is None or not hasattr(openai, "AzureOpenAI"):
             raise ImportError(_ERROR_JSON)
 
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
-        key      = os.getenv("AZURE_OPENAI_API_KEY")
-        version  = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        key = os.getenv("AZURE_OPENAI_API_KEY")
+        version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 
         if not (endpoint and key):
             raise ImportError(
@@ -54,6 +55,7 @@ class _AzureClient(LLMClient):
                     "fix": "Check endpoint/deployment or API version",
                 }
             )
+
 
 def create():
     return _AzureClient()

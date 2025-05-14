@@ -29,8 +29,8 @@ class PythonASTUnit(SourceUnit):
         self.source = text
         self.tree = ast.parse(text, filename=str(path))
         self._current = None
-        self._call_nodes = None          # lazy build
-        self._fstring_nodes = []         # filled by visitor
+        self._call_nodes = None  # lazy build
+        self._fstring_nodes = []  # filled by visitor
 
     # ---- helpers detectors already use ----------------------------------
     def joined_fstrings(self) -> Iterable[ast.JoinedStr]:
@@ -38,14 +38,14 @@ class PythonASTUnit(SourceUnit):
         Return a cached list of all JoinedStr (f‑string) nodes.
         We build it only once with ast.walk ‑‑ cheap and correct.
         """
-        if not self._fstring_nodes:          # first call → populate
+        if not self._fstring_nodes:  # first call → populate
             self._fstring_nodes = [
                 n for n in ast.walk(self.tree) if isinstance(n, ast.JoinedStr)
             ]
         return self._fstring_nodes
 
     def calls(self) -> Iterable[ast.Call]:
-        if self._call_nodes is None:     # only build once if somebody needs it
+        if self._call_nodes is None:  # only build once if somebody needs it
             self._call_nodes = [
                 n for n in ast.walk(self.tree) if isinstance(n, ast.Call)
             ]

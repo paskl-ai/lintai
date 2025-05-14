@@ -21,17 +21,45 @@
    pip install -e ".[dev]"
    ```
 
-3. **Run tests**:
+3. **Set up pre-commit hooks**:
+
+   ```bash
+   pre-commit install
+   ```
+
+4. **Run tests**:
 
    ```bash
    pytest
    ```
 
-4. **Try a scan**:
+5. **Try a scan**:
 
    ```bash
    lintai scan examples/
    ```
+
+---
+
+## 🔍 Pre-commit Hooks
+
+This project uses pre-commit hooks to ensure code quality and consistency. When you attempt to commit changes, the following checks will run automatically:
+
+- **trailing-whitespace**: Trims trailing whitespace
+- **end-of-file-fixer**: Ensures files end with a newline
+- **black**: Formats Python code according to our style guide
+
+If a pre-commit check fails:
+
+1. The hook will automatically fix issues when possible (like formatting)
+2. You'll need to stage the changes made by the hooks: `git add .`
+3. Try committing again
+
+To manually run all pre-commit checks:
+
+```bash
+pre-commit run --all-files
+```
 
 ---
 
@@ -66,17 +94,12 @@
 
 ## 🧼 Code Style
 
-* Follow [Black](https://black.readthedocs.io/) for formatting:
-
-  ```bash
-  black lintai/
-  ```
-
-* Use `pytest` for tests
-
-* Keep detectors small and focused
-
-* Document any new functionality or config flags in `README.md` or help text
+- We use [Black](https://black.readthedocs.io/) for code formatting (enforced by pre-commit)
+- Max line length is set to Black's default (88 characters)
+- Pre-commit will automatically format your code when you commit
+- Use `pytest` for tests
+- Keep detectors small and focused
+- Document any new functionality or config flags in `README.md` or help text
 
 ---
 

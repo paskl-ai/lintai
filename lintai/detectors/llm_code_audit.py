@@ -5,11 +5,10 @@ from lintai.engine.ai_tags import is_hot_call
 from lintai.llm import get_client
 
 logger = logging.getLogger(__name__)
-_CLIENT = get_client()                       # dummy if no key / provider error
+_CLIENT = get_client()  # dummy if no key / provider error
 
-_CODE_RE = re.compile(
-    r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE
-)
+_CODE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
+
 
 def _extract_json(txt: str) -> str | None:
     """
@@ -23,6 +22,7 @@ def _extract_json(txt: str) -> str | None:
     raw = txt.strip()
     return raw if raw.startswith("{") and raw.endswith("}") else None
 
+
 # JSON issue prefixes that mean “this was a stub or error, ignore”
 _IGNORE_PREFIXES = (
     "llm detection disabled",
@@ -33,21 +33,27 @@ _IGNORE_PREFIXES = (
     "openai provider selected but sdk unavailable",
 )
 
+
 @register("AI_LLM01", scope="node", node_types=(ast.Call,))
 def llm_audit(unit):
     call = unit._current
     if not is_hot_call(call):
         return
 
-    snippet = ast.get_source_segment(getattr(unit, "source", ""), call) or "<code unavailable>"
-    prompt = textwrap.dedent(f"""
+    snippet = (
+        ast.get_source_segment(getattr(unit, "source", ""), call)
+        or "<code unavailable>"
+    )
+    prompt = textwrap.dedent(
+        f"""
         As a secure‑coding assistant, identify any OWASP GenAI risks
         in the following code.  Return *one‑line* JSON with keys
         "issue", "sev", "fix", "owasp", and optional "mitre" (list).
         ```python
         {snippet}
         ```
-    """)
+    """
+    )
 
     try:
         reply = _CLIENT.ask(prompt, max_tokens=180)
@@ -83,7 +89,7 @@ def llm_audit(unit):
 
     yield Finding(
         owasp_id=data.get("owasp", "Axx"),
-        mitre=mitre,                         # may be empty list – OK
+        mitre=mitre,  # may be empty list – OK
         severity=data["sev"],
         message=f"LLM audit: {data['issue']}",
         location=unit.path,

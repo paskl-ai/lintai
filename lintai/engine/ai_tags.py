@@ -3,16 +3,19 @@ import ast, re
 # Common provider libs & frameworks
 _IMPORT_PAT = re.compile(
     r"\b(openai|litellm|langchain|anthropic|google\.generativeai|cohere"
-    r"|llama_index|guidance|gpt4all|ollama)\b", re.I
+    r"|llama_index|guidance|gpt4all|ollama)\b",
+    re.I,
 )
 _CALL_PAT = re.compile(
     r"\b(chat|completions?|generate|run|predict|invoke|stream)_?", re.I
 )
 
+
 def is_hot_import(node: ast.AST) -> bool:
     if isinstance(node, (ast.Import, ast.ImportFrom)):
         return any(_IMPORT_PAT.search(n.name) for n in node.names)
     return False
+
 
 def is_hot_call(node: ast.AST) -> bool:
     if not isinstance(node, ast.Call):

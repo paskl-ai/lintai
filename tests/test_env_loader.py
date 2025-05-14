@@ -1,5 +1,6 @@
 import os, json, subprocess, textwrap, pathlib
 
+
 def test_env_file_loading(tmp_path):
     env = tmp_path / ".env"
     env.write_text("LINTAI_LLM_PROVIDER=dummy\nEXTRA=42\n")
@@ -17,4 +18,3 @@ def test_env_file_loading(tmp_path):
     assert res.returncode == 0, res.stderr
     # Optional: sanity‑check that lintai read the env file
     assert "Loaded provider settings from" in res.stderr
-
