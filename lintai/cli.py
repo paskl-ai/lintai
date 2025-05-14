@@ -42,7 +42,11 @@ else:
 
 
 def _iter_python_files(root: Path) -> Iterable[Path]:
-    for path in root if root.is_file() else root.rglob("*.py"):
+    if root.is_file():
+        if root.suffix == ".py":
+            yield root
+        return
+    for path in root.rglob("*.py"):
         if _IGNORE.match_file(path.relative_to(root).as_posix()):
             continue
         yield path
@@ -115,12 +119,10 @@ def run_scan(
 @app.command("scan")
 def scan_command(
     path: Path = typer.Argument(..., help="File or directory to scan"),
-    ruleset: Path
-    | None = typer.Option(
+    ruleset: Path | None = typer.Option(
         None, "--ruleset", "-r", help="Path to YAML/JSON rule file or folder"
     ),
-    env_file: Path
-    | None = typer.Option(
+    env_file: Path | None = typer.Option(
         None, "--env-file", "-e", help="Optional .env with provider keys"
     ),
     log_level: str = typer.Option(
