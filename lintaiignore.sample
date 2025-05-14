@@ -1,0 +1,12 @@
+###################################################################################
+#  Example .lintaiignore file to ignore directories/files in scanned source code  #
+###################################################################################
+
+# ignore common virtual‑env / build output
+.venv/
+build/
+site-packages/
+__pycache__/
+.aws-sam/
+*.egg-info/
+node_modules/

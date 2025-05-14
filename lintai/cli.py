@@ -11,7 +11,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Iterable, List
-
+import pathspec
 import typer
 
 from lintai.core.loader import load_plugins
@@ -30,13 +30,22 @@ logger = logging.getLogger("lintai.cli")
 
 
 # --------------------------------------------------------------------------- #
-# small helpers
+# Helper functions
 # --------------------------------------------------------------------------- #
+# Load ignore patterns from .lintaiignore if it exists; otherwise, use an empty list
+if Path(".lintaiignore").exists():
+    _IGNORE = pathspec.PathSpec.from_lines(
+        "gitwildmatch", Path(".lintaiignore").read_text().splitlines()
+    )
+else:
+    _IGNORE = pathspec.PathSpec.from_lines("gitwildmatch", [])
+
+
 def _iter_python_files(root: Path) -> Iterable[Path]:
-    if root.is_file() and root.suffix == ".py":
-        yield root
-    else:
-        yield from root.rglob("*.py")
+    for path in root if root.is_file() else root.rglob("*.py"):
+        if _IGNORE.match_file(path.relative_to(root).as_posix()):
+            continue
+        yield path
 
 
 def _maybe_load_env(env_path: Path | None) -> None:
@@ -106,10 +115,12 @@ def run_scan(
 @app.command("scan")
 def scan_command(
     path: Path = typer.Argument(..., help="File or directory to scan"),
-    ruleset: Path | None = typer.Option(
+    ruleset: Path
+    | None = typer.Option(
         None, "--ruleset", "-r", help="Path to YAML/JSON rule file or folder"
     ),
-    env_file: Path | None = typer.Option(
+    env_file: Path
+    | None = typer.Option(
         None, "--env-file", "-e", help="Optional .env with provider keys"
     ),
     log_level: str = typer.Option(

@@ -1,3 +1,6 @@
+#Lintaiignore file
+.lintaiignore
+
 # Python virtualenvs
 .env
 .venv
@@ -42,4 +45,3 @@ doc/build/
 *.orig
 *.rej
 *.patch
-
