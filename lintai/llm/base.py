@@ -12,8 +12,7 @@ class LLMClient(ABC):
     """
 
     @abstractmethod
-    def ask(self, prompt: str, **kwargs: Any) -> str:
-        ...
+    def ask(self, prompt: str, **kwargs: Any) -> str: ...
 
     @property
     def max_context(self) -> int:

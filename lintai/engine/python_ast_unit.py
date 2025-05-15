@@ -28,6 +28,10 @@ class PythonASTUnit(SourceUnit):
         super().__init__(path)
         self.source = text
         self.tree = ast.parse(text, filename=str(path))
+        for parent in ast.walk(self.tree):
+            for child in ast.iter_child_nodes(parent):
+                setattr(child, "parent", parent)
+
         self._current = None
         self._call_nodes = None  # lazy build
         self._fstring_nodes = []  # filled by visitor

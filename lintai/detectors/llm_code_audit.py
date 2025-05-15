@@ -97,14 +97,46 @@ def _get_enclosing_function_source(call: ast.Call, source: str, tree: ast.AST) -
     return ast.get_source_segment(source, target) or "<code unavailable>"
 
 
-# --------------------------------------------------------------------------- #
-# detector                                                                    #
-# --------------------------------------------------------------------------- #
+_SEEN_FUNCS: set[tuple[str, int]] = set()
+
+
+def _debug_ancestry(node):
+    chain = []
+    while node:
+        chain.append(f"{type(node).__name__}:{getattr(node,'lineno', '?')}")
+        node = getattr(node, "parent", None)
+    return " -> ".join(chain)
+
+
 @register("AI_LLM01", scope="node", node_types=(ast.Call,))
 def llm_audit(unit):
     call = unit._current
     if not is_hot_call(call):
-        return  # not a model call
+        return
+
+    # climb to the nearest function *or* lambda
+    func_node = call
+    while func_node and not isinstance(
+        func_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+    ):
+        func_node = getattr(func_node, "parent", None)
+
+    if func_node is None:  # top-level call → treat the Module as key
+        key = (str(unit.path), "module", call.lineno)
+    else:
+        key = (str(unit.path), func_node.lineno)
+
+    if key in _SEEN_FUNCS:
+        logger.info("Skipping duplicate call in scope %s", key)
+        return
+    _SEEN_FUNCS.add(key)
+
+    logger.info(
+        "Visiting call at %s:%s - ancestry: %s",
+        unit.path,
+        call.lineno,
+        _debug_ancestry(call),
+    )
 
     # Short-circuit when everything is already routed through sanitisers
     if unit.is_user_tainted(call) and _call_has_sanitised_args(call):
