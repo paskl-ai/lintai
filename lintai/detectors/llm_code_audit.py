@@ -127,11 +127,11 @@ def llm_audit(unit):
         key = (str(unit.path), func_node.lineno)
 
     if key in _SEEN_FUNCS:
-        logger.info("Skipping duplicate call in scope %s", key)
+        logger.debug("Skipping duplicate call in scope %s", key)
         return
     _SEEN_FUNCS.add(key)
 
-    logger.info(
+    logger.debug(
         "Visiting call at %s:%s - ancestry: %s",
         unit.path,
         call.lineno,
