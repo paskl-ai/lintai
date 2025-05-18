@@ -15,10 +15,11 @@ import re
 import textwrap
 from typing import Optional
 
+from lintai.engine.ai_call_analysis import ProjectAnalyzer
 from lintai.core.finding import Finding
 from lintai.detectors import register
-from lintai.engine.ai_tags import is_hot_call
 from lintai.llm import get_client
+from lintai.engine.ai_call_analysis import is_ai_call
 
 logger = logging.getLogger(__name__)
 _CLIENT = get_client()  # dummy stub if provider missing
@@ -37,11 +38,56 @@ _IGNORE_PREFIXES = (
     "sdk unavailable",
     "clean",  # model replied “issue = clean”
 )
+_EMITTED: set[tuple[str, int, str]] = set()
 
 
 # --------------------------------------------------------------------------- #
 # helper functions                                                             #
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# richer context helpers                                                      #
+# --------------------------------------------------------------------------- #
+def _snippet(node: ast.AST, src: str, max_lines: int = 60) -> str:
+    """
+    Return *dedented* source for *node*, trimmed to *max_lines*.
+    """
+    code = ast.get_source_segment(src, node) or ""
+    lines = textwrap.dedent(code).splitlines()
+    return "\n".join(lines[:max_lines])
+
+
+def _path_context(unit, func_node: ast.AST, max_funcs: int = 3) -> str:
+    """
+    Using the project-wide call-graph gather up to *max_funcs* direct
+    callers **and** direct callees of *func_node* and return their source
+    text (clipped) as one big string.
+    """
+    try:
+        from lintai.engine import ai_analyzer  # late import → no cycle
+
+        if not ai_analyzer:
+            return ""
+
+        qname = unit.qualname(func_node)  # PythonASTUnit helper
+        callers = list(ai_analyzer.callers_of(qname))[:max_funcs]
+        callees = list(ai_analyzer.callees_of(qname))[:max_funcs]
+
+        blocks: list[str] = []
+        for name in callers + callees:
+            src_unit, node = ai_analyzer.source_of(name)  # (PythonASTUnit, ast.AST)
+            blocks.append(_snippet(node, src_unit.source))
+
+        if not blocks:
+            return ""
+
+        sep = "\n\n## ─── NEXT FUNCTION ─── ##\n"
+        return "\n\n### CALL-FLOW CONTEXT ###\n" + sep.join(blocks)
+
+    except Exception as exc:
+        logger.debug("llm_code_audit: context error – %s", exc)
+        return ""
+
+
 def _is_sanitizer(name: str) -> bool:
     return name in _SANITIZERS or bool(_SANITIZER_RE.match(name))
 
@@ -111,8 +157,16 @@ def _debug_ancestry(node):
 @register("AI_LLM01", scope="node", node_types=(ast.Call,))
 def llm_audit(unit):
     call = unit._current
-    if not is_hot_call(call):
+    from lintai.engine.ai_call_analysis import _AttrChain  # local import ➜ avoid cycle
+
+    dotted = ".".join(_AttrChain.parts(call.func)) or repr(call.func)
+    # logger.debug("llm_code_audit: checking %s  (lineno=%s)",
+    #             dotted, getattr(call, "lineno", "?"))
+
+    if not is_ai_call(call):
         return
+
+    logger.debug("llm_code_audit:  **AI call detected** ➜ %s", dotted)
 
     # climb to the nearest function *or* lambda
     func_node = call
@@ -149,6 +203,7 @@ def llm_audit(unit):
         return
 
     func_src = _get_enclosing_function_source(call, unit.source, tree)
+    flow_src = _path_context(unit, func_node)
 
     prompt = textwrap.dedent(
         f"""
@@ -164,13 +219,18 @@ def llm_audit(unit):
         Identify OWASP GenAI risks in the code below. Respond with **single-line**
         JSON containing "issue", "sev", "fix", "owasp" and optional "mitre".
 
+        ### LOCAL FUNCTION ###
         ```python
         {func_src}
         ```
+
+        {flow_src}
         """
     ).strip()
 
-    logger.debug(f"llm_code_audit: detecting issues in {unit.path}")
+    logger.debug(
+        f"Detecting issues in {unit.path} {dotted} with LLM prompt:\n{prompt}\n\n"
+    )
 
     try:
         reply = _CLIENT.ask(prompt, max_tokens=180)
@@ -193,6 +253,11 @@ def llm_audit(unit):
     if any(issue.startswith(p) for p in _IGNORE_PREFIXES):
         logger.debug("llm_code_audit: benign / clean – skipped")
         return
+
+    dedup = (str(unit.path), call.lineno, str(data.get("owasp", "Axx")))
+    if dedup in _EMITTED:
+        return
+    _EMITTED.add(dedup)
 
     yield Finding(
         owasp_id=data.get("owasp", "Axx"),

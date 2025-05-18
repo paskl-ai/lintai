@@ -28,6 +28,19 @@ _DEFAULT_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=_DEFAULT_FMT)
 logger = logging.getLogger("lintai.cli")
 
+# --------------------------------------------------------------------------- #
+# Silence very noisy third-party loggers when the user asks for -l debug.    #
+# They’ll still emit WARNING/ERROR, just not DEBUG/INFO traffic.             #
+# --------------------------------------------------------------------------- #
+_NOISY_HTTP_LOGGERS = (
+    "httpcore",
+    "httpx",
+    "openai._base_client",  # HTTP trace inside the OpenAI SDK
+    "urllib3.connectionpool",  # if requests/urllib3 sneaks in
+)
+
+for name in _NOISY_HTTP_LOGGERS:
+    logging.getLogger(name).setLevel(logging.WARNING)
 
 # --------------------------------------------------------------------------- #
 # Helper functions
@@ -126,7 +139,16 @@ def scan_command(
         None, "--env-file", "-e", help="Optional .env with provider keys"
     ),
     log_level: str = typer.Option(
-        "INFO", "--log-level", "-l", help="python logging level (INFO, DEBUG, …)"
+        "INFO",
+        "--log-level",
+        "-l",
+        help="python logging level (DEBUG, INFO, …)",
+    ),
+    ai_call_depth: int = typer.Option(
+        2,
+        "--ai-call-depth",
+        "-d",
+        help="How many caller levels to mark as AI-related (default 2)",
     ),
     version: bool = typer.Option(False, "--version", help="Show version and exit"),
 ):
@@ -154,10 +176,34 @@ def scan_command(
     # ---------- .env loader ---------------------------------------------- #
     _maybe_load_env(env_file)
 
-    logger.info("Scanning started.")
-    findings_dicts = run_scan(path, ruleset=ruleset)
+    # -------------------------------------------------------- build AST units
+    python_files = list(_iter_python_files(path))
+    units: list[PythonASTUnit] = []
+    for f in python_files:
+        try:
+            units.append(PythonASTUnit(f, f.read_text(encoding="utf-8")))
+        except UnicodeDecodeError:
+            logger.warning("Skipping non-utf8 file %s", f)
 
-    # ---------- output ---------------------------------------------------- #
+    # ------------------------------------ initialise AI-call analyser ONCE
+    from lintai.engine import initialise as _init_ai_engine
+
+    _init_ai_engine(units, depth=ai_call_depth)
+
+    # ------------------------------------------------ run all detectors
+
+    load_plugins()
+    if ruleset:
+        logger.info("Loading custom ruleset from %s", ruleset)
+        load_rules(ruleset)
+
+    findings = []
+    for unit in units:
+        findings.extend(run_all(unit))
+
+    findings_dicts = [f.to_dict() for f in findings]
+
+    # --------------------------------------------- output & exit-code
     typer.echo(json.dumps(findings_dicts, indent=2))
     exit_code = 1 if any(f["severity"] == "blocker" for f in findings_dicts) else 0
     raise typer.Exit(exit_code)

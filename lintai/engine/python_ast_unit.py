@@ -22,6 +22,7 @@ class PythonASTUnit(SourceUnit):
         "_current",
         "_call_nodes",
         "_fstring_nodes",
+        "modname",
     )
 
     def __init__(self, path: Path, text: str):
@@ -31,10 +32,46 @@ class PythonASTUnit(SourceUnit):
         for parent in ast.walk(self.tree):
             for child in ast.iter_child_nodes(parent):
                 setattr(child, "parent", parent)
+                # let helpers (is_ai_call) reach the tracker for this module
+                setattr(child, "_unit", self)
 
         self._current = None
         self._call_nodes = None  # lazy build
         self._fstring_nodes = []  # filled by visitor
+        # e.g.  path src/app/foo.py →  src.app.foo
+        self.modname: str = ".".join(path.with_suffix("").parts).lstrip(".")
+
+    # ──────────────────────────────────────────────────────────────
+    #  Public helper: get dotted qualname of a node
+    # ──────────────────────────────────────────────────────────────
+    def qualname(self, node: ast.AST) -> str:  # noqa: D401
+        """
+        Return *module-qualified* name for **node**.
+
+        • Works for ``FunctionDef``, ``AsyncFunctionDef`` and ``Lambda``
+        • If node is not one of those, climbs to the nearest enclosing
+          function; returns just ``self.modname`` when nothing matches.
+        """
+        # climb up until we're outside every nested function
+        fn = node
+        while fn and not isinstance(
+            fn, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        ):
+            fn = getattr(fn, "parent", None)
+
+        if not fn:  # top-level statement
+            return self.modname
+
+        parts: list[str] = []
+        cur = fn
+        while cur and isinstance(
+            cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        ):
+            parts.append(cur.name if hasattr(cur, "name") else "<lambda>")
+            cur = getattr(cur, "parent", None)
+
+        parts.reverse()
+        return ".".join([self.modname, *parts])
 
     # ---- helpers detectors already use ----------------------------------
     def joined_fstrings(self) -> Iterable[ast.JoinedStr]:
