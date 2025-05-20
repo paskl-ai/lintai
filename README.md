@@ -1,57 +1,67 @@
-````markdown
 # Lintai
 
 **Lintai** is an experimental **AI-aware static-analysis tool** that finds _LLM-specific_ security bugs (prompt-injection, insecure output, data leakage …) long before they hit production.
 
-| Why Lintai?                                                                              | What it does                                                                                                                                                      |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Traditional SAST can’t “see” how you build prompts, stream completions or store vectors. | Lintai walks your AST, tags every AI sink (OpenAI, Anthropic, LangChain, …), follows wrapper functions and asks purpose-built detectors & LLMs to judge the risk. |
+| Why Lintai?                                                                              | What it does                                                                                                                            |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Traditional SAST can’t “see” how you build prompts, stream completions or store vectors. | Lintai walks your AST, tags every AI sink (OpenAI, Anthropic, LangChain, …), follows wrapper functions and asks LLMs to judge the risk. |
+
+> **Requires Python 3.9 or newer**
 
 ---
 
 ## ✨ Key features
 
-- **Two commands**
-  - `lintai scan <path>` — run all detectors, emit JSON findings
-  - `lintai ai-inventory <path>` — print every _direct_ AI call **plus** the wrapper functions that reach it
-- Modular detector registry (plug-in via `entry_points`)
-- Built-in rules for OWASP LLM Top 10 & MITRE ATT&CK
-- **LLM-powered** deep checks (uses GPT, Claude, Gemini, …)
-- DSL for custom rules (`yaml` / `json`)
+- Two commands:
+
+  - `lintai scan <path>` — run all detectors, emit JSON findings
+  - `lintai ai-inventory <path>` — list direct AI calls and wrappers
+
+- Modular detector registry (via `entry_points`)
+- OWASP LLM Top 10 & MITRE ATT\&CK built-in
+- LLM-powered checks (GPT, Claude, Gemini …)
+- DSL for custom rules
 - CI-friendly JSON output
 
 ---
 
 ## 🚀 Quick start
 
+### 1. Install
+
 ```bash
-# 1. install core (no heavy SDKs)
+# users
 pip install lintai
 
-# 2. optional – add an LLM provider for deep audits
-pip install "lintai[openai]"        # or  [anthropic]  [gemini]  [cohere]
+# contributors
+pip install -e ".[dev]"
+```
 
-# 3. set keys (create .env file based on env.sample) or export environment variables
+To enable LLM-backed checks:
 
-# 4. scan!
+```bash
+pip install "lintai[openai]"      # or  [anthropic]  [gemini]  [cohere]
+```
+
+### 2. Set up keys
+
+Use a `.env` file (see `env.sample`) or export the vars.
+
+### 3. Run it
+
+```bash
 lintai scan src/
-
-# 5. list all AI sinks & wrappers
-lintai ai-inventory src/             # --ai-call-depth 4  to walk higher
-```
-````
-
-Verbose logging:
-
-```bash
-lintai scan src/ --log-level DEBUG
+lintai ai-inventory src/ --ai-call-depth 4
 ```
 
-Custom rules:
+---
 
-```bash
-lintai scan src/ --ruleset my_rules/
-```
+## 🔧 Common flags
+
+| Flag              | Description                 |
+| ----------------- | --------------------------- |
+| `-l DEBUG`        | Verbose logging             |
+| `--ruleset <dir>` | Load custom YAML/JSON rules |
 
 ---
 
@@ -62,17 +72,17 @@ lintai scan src/ --ruleset my_rules/
   "owasp_id": "LLM01",
   "severity": "blocker",
   "location": "services/chat.py:57",
-  "message": "User-tainted f-string used in system-prompt without sanitisation",
+  "message": "User-tainted f-string used in prompt",
   "fix": "Wrap variable in escape_braces()"
 }
 ```
 
 ---
 
-## 🔬 How LLM-powered detectors work
+## 🔬 How LLM detectors work
 
-Some rules send the _full surrounding function_ to your chosen model (GPT-4o, Claude 3, …) and ask for a structured JSON verdict.
-Enable them by installing a provider extra and exporting the matching API key:
+Some rules send the **full function** to your LLM and expect
+structured JSON feedback.
 
 ```bash
 export LINTAI_LLM_PROVIDER=openai
@@ -83,36 +93,33 @@ export OPENAI_API_KEY=sk-...
 
 ## 🛠 Directory layout
 
-```
 lintai/
- ├─ cli.py            # Typer CLI (scan / ai-inventory)
- ├─ engine/           # AST walker + AI call analysis
- ├─ detectors/        # Static & LLM-backed rules
- ├─ dsl/              # Custom rule loader
- └─ core/             # Finding model & helpers
-```
+├─ cli.py # Typer CLI (scan / ai-inventory)
+├─ engine/ # AST walker + AI call analysis
+├─ detectors/ # Static & LLM-backed rules
+├─ dsl/ # Custom rule loader
+└─ core/ # Finding model & helpers
 
 ---
 
-## 🗺 Roadmap
+## 📺 Roadmap
 
 - SARIF output & GitHub Actions
 - JS / TS support
-- VS Code extension
+- VS Code plugin
 - Live taint-tracking
+- PyPI release
 
 ---
 
 ## 🤝 Contributing
 
-Bug reports, ideas and PRs are welcome!
+We welcome ideas, issues, and PRs.
 
 1. **Star** the repo
-2. `git checkout -b feature/my-idea`
+2. `git checkout -b feature/my-fix`
 3. Open a PR
+4. Check CONTRIBUTING.md for more details
 
-## Creator
-
-Created by **Harsh Parandekar** – feel free to reach out on ☁️ https://linkedin.com/in/hparandekar ☁️.
-
-Licensed under **Apache 2.0**.
+Created by **Harsh Parandekar** — [LinkedIn](https://linkedin.com/in/hparandekar)
+Licensed under **Apache 2.0**
