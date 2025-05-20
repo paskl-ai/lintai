@@ -59,7 +59,10 @@ def _path_to_modname(project_root: Path, path: Path) -> str:
     <root>/pkg/sub/mod.py   →   "pkg.sub.mod"
     Non-identifier parts (dash, space, etc.) are replaced by “_”.
     """
-    rel = path.relative_to(project_root).with_suffix("")
+    if path == project_root:
+        rel = path.with_suffix("")  # single-file case
+    else:
+        rel = path.relative_to(project_root).with_suffix("")
     parts = [_NON_ID.sub("_", p) for p in rel.parts]
     return ".".join(parts)
 
@@ -345,11 +348,35 @@ class ProjectAnalyzer:
         self._qname_to_id: dict[str, int] = {}
         self._graph = nx.DiGraph()
         self._where: dict[str, tuple[PythonASTUnit, ast.AST]] = {}
+        self.ai_modules: set[str] = set()
 
         # cache: file path → derived module name (sanitised, root-relative)
         self._modnames = {
             u.path: _path_to_modname(self.root, u.path) for u in self.units
         }
+
+    def _mark_ai_modules(self) -> None:
+        # 1️⃣ sink files
+        for call in self._ai_sinks:
+            self.ai_modules.add(call.file.as_posix())
+
+        # 2️⃣ files defining an AI-tagged function
+        for fn in self._ai_funcs:
+            entry = self._where.get(fn)
+            if entry:
+                u, _ = entry
+                self.ai_modules.add(u.path.as_posix())
+
+        # 3️⃣ one-hop callers
+        for caller, callees in self._call_graph.items():
+            entry = self._where.get(caller)
+            if entry:
+                u, _ = entry
+                self.ai_modules.add(u.path.as_posix())
+
+        # tag the unit as an ai module for quick lookups
+        for u in self.units:
+            u.is_ai_module = u.path.as_posix() in self.ai_modules
 
     # ------------------------------------------------------------------
     def analyze(self):
@@ -357,6 +384,8 @@ class ProjectAnalyzer:
         self._phase_two()
 
         self._propagate_ai_tags()
+        self._mark_ai_modules()
+
         return self  # allow chaining
 
     # ──────────────────────────────────────────────────────────────
@@ -538,8 +567,8 @@ class ProjectAnalyzer:
 
 def is_ai_call(node: ast.Call) -> bool:
     """
-    Return *True* when the Call ultimately resolves to one of the phase-1
-    AI sinks.  We first try an exact dotted match; if that fails we
+    Return *True* when the Call ultimately resolves to one of the AI sinks or
+    AI tagged functions.  We first try an exact dotted match; if that fails we
     resolve the leading alias with the module’s _ImportTracker.
     """
     from lintai.engine import ai_analyzer
@@ -603,3 +632,22 @@ def is_ai_function_qualname(qualname: str) -> bool:
     from lintai.engine import ai_analyzer
 
     return ai_analyzer is not None and qualname in ai_analyzer.ai_functions
+
+
+def is_ai_module_path(unit_or_path) -> bool:
+    """
+    Return True iff the given *PythonASTUnit* **or** path string belongs
+    to a module that the analyser has classified as AI-related.
+    """
+    from pathlib import Path
+    from lintai.engine import ai_analyzer
+
+    if ai_analyzer is None:
+        return False
+
+    if hasattr(unit_or_path, "path"):  # PythonASTUnit
+        p = unit_or_path.path
+    else:  # str | Path
+        p = Path(str(unit_or_path))
+
+    return p.as_posix() in ai_analyzer.ai_modules

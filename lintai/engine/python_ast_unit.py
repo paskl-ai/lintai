@@ -23,6 +23,7 @@ class PythonASTUnit(SourceUnit):
         "_call_nodes",
         "_fstring_nodes",
         "modname",
+        "is_ai_module",
     )
 
     def __init__(self, path: Path, text: str):
@@ -40,6 +41,9 @@ class PythonASTUnit(SourceUnit):
         self._fstring_nodes = []  # filled by visitor
         # e.g.  path src/app/foo.py →  src.app.foo
         self.modname: str = ".".join(path.with_suffix("").parts).lstrip(".")
+
+        # will be set by ProjectAnalyzer._mark_ai_modules()
+        self.is_ai_module: bool = False
 
     # ──────────────────────────────────────────────────────────────
     #  Public helper: get dotted qualname of a node

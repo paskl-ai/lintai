@@ -44,9 +44,6 @@ _EMITTED: set[tuple[str, int, str]] = set()
 # --------------------------------------------------------------------------- #
 # helper functions                                                             #
 # --------------------------------------------------------------------------- #
-# --------------------------------------------------------------------------- #
-# richer context helpers                                                      #
-# --------------------------------------------------------------------------- #
 def _snippet(node: ast.AST, src: str, max_lines: int = 60) -> str:
     """
     Return *dedented* source for *node*, trimmed to *max_lines*.
@@ -157,16 +154,19 @@ def _debug_ancestry(node):
 @register("AI_LLM01", scope="node", node_types=(ast.Call,))
 def llm_audit(unit):
     call = unit._current
-    from lintai.engine.ai_call_analysis import _AttrChain  # local import ➜ avoid cycle
-
-    dotted = ".".join(_AttrChain.parts(call.func)) or repr(call.func)
-    # logger.debug("llm_code_audit: checking %s  (lineno=%s)",
-    #             dotted, getattr(call, "lineno", "?"))
 
     if not is_ai_call(call):
         return
 
-    logger.debug("llm_code_audit:  **AI call detected** ➜ %s", dotted)
+    if getattr(_CLIENT, "is_dummy", False):
+        logger.debug(
+            "llm_code_audit: dummy client – skipping call at %s:%s",
+            unit.path,
+            call.lineno,
+        )
+        return
+
+    logger.debug("llm_code_audit: call at %s:%s", unit.path, call.lineno)
 
     # climb to the nearest function *or* lambda
     func_node = call
@@ -229,7 +229,7 @@ def llm_audit(unit):
     ).strip()
 
     logger.debug(
-        f"Detecting issues in {unit.path} {dotted} with LLM prompt:\n{prompt}\n\n"
+        f"Detecting issues in {unit.path} {call.lineno} with LLM prompt:\n{prompt}\n\n"
     )
 
     try:

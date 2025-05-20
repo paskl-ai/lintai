@@ -11,6 +11,8 @@ class LLMClient(ABC):
     Minimal interface all providers must implement.
     """
 
+    is_dummy: bool = False  # real providers don’t touch it
+
     @abstractmethod
     def ask(self, prompt: str, **kwargs: Any) -> str: ...
 

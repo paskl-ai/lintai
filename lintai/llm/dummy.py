@@ -12,6 +12,8 @@ _OFFLINE_JSON = json.dumps(
 
 def create():
     class _Dummy(LLMClient):
+        is_dummy = True
+
         def ask(self, prompt, **kw):
             return _OFFLINE_JSON
 

@@ -10,7 +10,10 @@ SINK_FUNCS = {"eval", "exec", "subprocess.call", "os.system"}
 
 @register("LLM02", scope="module")
 def detect_insecure_output(unit: SourceUnit):
-    logger.debug(">>> Running OWASP LLM02 detector")
+    if not getattr(unit, "is_ai_module", False):
+        return
+
+    logger.debug(f">>> Running OWASP LLM02 detector for {unit.path} <<<")
 
     for call in getattr(unit, "calls", lambda: [])():
         if getattr(call, "full_name", "") in SINK_FUNCS and getattr(

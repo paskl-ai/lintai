@@ -8,7 +8,10 @@ logger = logging.getLogger(__name__)
 
 @register("LLM01", scope="module")
 def detect_prompt_injection(unit: SourceUnit):
-    logger.debug(">>> Running OWASP LLM01 detector")
+    if not getattr(unit, "is_ai_module", False):
+        return
+
+    logger.debug(f">>> Running OWASP LLM01 detector for {unit.path} <<<")
 
     for fstr in unit.joined_fstrings():
         if unit.is_user_tainted(fstr) and not unit.has_call("sanitize", fstr):

@@ -31,7 +31,7 @@ pip install lintai
 # 2. optional – add an LLM provider for deep audits
 pip install "lintai[openai]"        # or  [anthropic]  [gemini]  [cohere]
 
-# 3. set keys (see .env.example) or export environment variables
+# 3. set keys (create .env file based on env.sample) or export environment variables
 
 # 4. scan!
 lintai scan src/

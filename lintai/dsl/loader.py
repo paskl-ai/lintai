@@ -1,8 +1,11 @@
 from __future__ import annotations
-import ast, json, yaml, pathlib, re
+import ast, json, yaml, pathlib, re, logging
 from lintai.detectors import register
 from lintai.core.finding import Finding
 from lintai.detectors.base import SourceUnit
+from lintai.engine.ai_call_analysis import is_ai_call
+
+logger = logging.getLogger(__name__)
 
 
 def _load_one(rule: dict):
@@ -36,7 +39,28 @@ def _load_one(rule: dict):
     # generate detector on‑the‑fly
     @register(nid, scope=scope, node_types=node_types)
     def _generated(unit: SourceUnit, _r=rule, _cre=compiled_re):
-        node = unit._current
+        node = unit._current  # set by the dispatcher
+
+        # ── 1️⃣  global gating ───────────────────────────────────────────────
+        if scope == "module":
+            if not getattr(unit, "is_ai_module", False):
+                return
+        elif scope == "node":
+            if any(issubclass(t, ast.Call) for t in node_types):
+                # this rule cares only about actual AI calls
+                if not is_ai_call(node):  # <-- import from ai_call_analysis
+                    return
+            else:
+                # non-Call nodes → respect file-level gating
+                if not getattr(unit, "is_ai_module", False):
+                    return
+
+        # ── 2️⃣  (optional) debug log ────────────────────────────────────────
+        logger.debug(
+            "DSL-%s running on %s line %s", nid, unit.path, getattr(node, "lineno", "?")
+        )
+
+        # ── 3️⃣  rule body ───────────────────────────────────────────────────
         code = _extract_text(node)
         if code and _cre.search(code):
             yield Finding(
