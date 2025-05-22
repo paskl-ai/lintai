@@ -97,13 +97,26 @@ _PROVIDER_RX = re.compile(
         \b(
             openai | anthropic | cohere | ai21 | mistral | together_ai? |
             google\.generativeai | gpt4all | ollama |
+
             # Frameworks / SDKs
             langchain | langgraph | llama_index | litellm | guidance |
             autogen | autogpt | crewai |
+
+            # Enterprise & platform SDKs
+            servicenow | nowassist | salesforce\.einstein | einstein_gpt |
+            semantickernel | promptflow | vertexai |
+            boto3\.bedrock | bedrock_runtime | sagemaker |
+            watsonx | snowflake\.cortex | snowpark_llm |
+
+            # Vendor wrappers
+            chatopenai | azurechatopenai | togetherai |
+
             # Vector DB / embedding infra
             chromadb | pinecone | weaviate |
+
             # HuggingFace transformers & inference API
             transformers | huggingface_hub |
+
             # azure‑openai client class
             AzureOpenAI
         )\b
@@ -188,7 +201,7 @@ class _PhaseOneVisitor(ast.NodeVisitor):
 
     visit_ImportFrom = visit_Import  # alias
 
-    # ---------------------------------------------------------------------
+    # Inspect code with function calls to find AI calls
     def visit_Call(self, node: ast.Call):
         parts = _AttrChain.parts(node.func)
         if not parts:
@@ -209,6 +222,25 @@ class _PhaseOneVisitor(ast.NodeVisitor):
                 self.sinks.append(AICall(dotted, self.unit.path, node.lineno))
         self.generic_visit(node)
 
+    # Inspect code with binary operators to find agentic AI calls
+    def visit_BinOp(self, node: ast.BinOp):
+        if isinstance(node.op, ast.BitOr):
+            for side in (node.left, node.right):
+                parts = _AttrChain.parts(side)
+                if parts:
+                    base = self.tracker.resolve(parts[0])
+                    if _PROVIDER_RX.search(base):
+                        dotted = "|".join(
+                            [
+                                _AttrChain.to_dotted(_AttrChain.parts(node.left)),
+                                _AttrChain.to_dotted(_AttrChain.parts(node.right)),
+                            ]
+                        )
+                        self.sinks.append(AICall(dotted, self.unit.path, node.lineno))
+                        break
+        self.generic_visit(node)
+
+    # Inspect code with assignment to find assignments to AI libraries
     def visit_Assign(self, node: ast.Assign):
         # e.g. pattern:  <name> = <Call to AzureOpenAI / openai.Client()>
         if (
