@@ -6,7 +6,7 @@
 | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Traditional SAST can’t “see” how you build prompts, stream completions or store vectors. | Lintai walks your AST, tags every AI sink (OpenAI, Anthropic, LangChain, …), follows wrapper functions and asks LLMs to judge the risk. |
 
-> **Requires Python 3.9 or newer**
+> **Requires Python 3.10 or newer**
 
 ---
 
@@ -43,9 +43,10 @@ To enable LLM-backed checks:
 pip install "lintai[openai]"      # or  [anthropic]  [gemini]  [cohere]
 ```
 
-### 2. Set up keys
+### 2. Set up environment
 
-Use a `.env` file (see `env.sample`) or export the vars.
+Use a `.env` file (see `env.sample`) or export the vars to pass LLM model and key
+Create a `.lintaiignore` to tell the tools which directories or files to ignore in the codebase (see `lintaiignore.sample`)
 
 ### 3. Run it
 

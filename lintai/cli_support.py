@@ -25,13 +25,22 @@ _NOISY_HTTP_LOGGERS = (
 for n in _NOISY_HTTP_LOGGERS:
     logging.getLogger(n).setLevel(logging.WARNING)
 
+
 # ------------------------------------------------------------------ utils
-if Path(".lintaiignore").exists():
-    _IGNORE = pathspec.PathSpec.from_lines(
-        "gitwildmatch", Path(".lintaiignore").read_text().splitlines()
-    )
-else:
-    _IGNORE = pathspec.PathSpec.from_lines("gitwildmatch", [])
+def _load_ignore() -> pathspec.PathSpec:
+    for candidate in (".lintaiignore", ".gitignore"):
+        p = Path(candidate)
+        if p.is_file():
+            logger.info("Loading ignore patterns from %s", p)
+            return pathspec.PathSpec.from_lines(
+                "gitwildmatch", p.read_text().splitlines()
+            )
+    # no ignore files – empty spec
+    logger.info("No .lintaiignore or .gitignore found. Will not ignore any files.")
+    return pathspec.PathSpec.from_lines("gitwildmatch", [])
+
+
+_IGNORE = _load_ignore()
 
 
 def iter_python_files(root: Path) -> Iterable[Path]:

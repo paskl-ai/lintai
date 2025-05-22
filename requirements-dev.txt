@@ -4,7 +4,9 @@ black
 typer>=0.12
 pyyaml
 python-dotenv
+pathspec
 networkx
+
 # Dependencies for LLM providers used in the library
 openai>=1.0
 anthropic
