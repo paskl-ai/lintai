@@ -38,13 +38,23 @@ def test_openai_provider_select(monkeypatch):
 
 def test_openai_provider_requires_sdk(monkeypatch):
     monkeypatch.setenv("LINTAI_LLM_PROVIDER", "openai")
-    # ensure import fails
-    monkeypatch.setitem(sys.modules, "openai", None)
 
+    # Remove 'openai' from sys.modules to simulate ImportError
+    sys.modules.pop("openai", None)
+
+    # Reload the openai client module to re-evaluate the import block
+    import lintai.llm.openai as llm_openai
+
+    importlib.reload(llm_openai)
+
+    # Explicitly patch the `openai` symbol to None inside the module
+    monkeypatch.setattr(llm_openai, "openai", None)
+
+    # Reload lintai.llm to re-trigger provider loading
     import lintai.llm as llm_mod
-    import importlib
 
     importlib.reload(llm_mod)
 
-    with pytest.raises(SystemExit):  # CLI path
+    # Ensure it exits when trying to get the provider
+    with pytest.raises(SystemExit):
         llm_mod.get_client()
