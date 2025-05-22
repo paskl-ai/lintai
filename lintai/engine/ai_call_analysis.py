@@ -460,7 +460,12 @@ class ProjectAnalyzer:
                     self._units_by_node[node] = unit
                     self._id_to_qname[id(node)] = q
                     self._qname_to_id[q] = id(node)
-                    plain = f"{self._modnames[unit.path]}.{node.name}"
+                    # Lambdas are anonymous – they have no `.name` attribute.
+                    if hasattr(node, "name"):
+                        plain = f"{self._modnames[unit.path]}.{node.name}"
+                    else:  # ast.Lambda → give it a synthetic, lineno-based label
+                        plain = f"{self._modnames[unit.path]}.<lambda>@{getattr(node, 'lineno', 0)}"
+
                     self._qname_to_id.setdefault(plain, id(node))
                     self._graph.add_node(id(node))
 

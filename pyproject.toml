@@ -2,7 +2,7 @@
 name = "lintai"
 version = "0.0.1"
 description = "Shift-left LLM security scanner"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "Harsh Parandekar", email = "harsh.parandekar@paskl.ai" }]
 license = { text = "Apache-2.0" }
 readme = "README.md"
@@ -21,6 +21,7 @@ dependencies = [
     "pyyaml>=6.0",
     "networkx>=3.2",
     "python-dotenv>=1.0",
+    "pathspec",
 ]
 
 [project.optional-dependencies]
