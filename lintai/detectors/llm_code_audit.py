@@ -44,13 +44,72 @@ _EMITTED: set[tuple[str, int, str]] = set()
 # --------------------------------------------------------------------------- #
 # helper functions                                                             #
 # --------------------------------------------------------------------------- #
+import ast
+import textwrap
+
+
 def _snippet(node: ast.AST, src: str, max_lines: int = 60) -> str:
     """
-    Return *dedented* source for *node*, trimmed to *max_lines*.
+    Return cleaned, dedented source for *node*, trimmed to *max_lines*.
+
+    • Strips module / function / class doc-strings (so the LLM
+      does not waste tokens on doc text).
+    • Drops single-line comments and blank lines.
+    • Leaves triple-quoted strings that are *inside* the code logic
+      (those are usually prompts we *do* want the model to see).
     """
-    code = ast.get_source_segment(src, node) or ""
-    lines = textwrap.dedent(code).splitlines()
-    return "\n".join(lines[:max_lines])
+    # --- 1. get raw text for the node -----------------------------------
+    raw = ast.get_source_segment(src, node) or ""
+    if not raw:
+        return "<code unavailable>"
+
+    # --- 2. parse & delete doc-strings ----------------------------------
+    class _DocstringStripper(ast.NodeTransformer):
+        def _strip(self, n: ast.AST):
+            if (
+                n.body
+                and isinstance(n.body[0], ast.Expr)
+                and isinstance(n.body[0].value, ast.Constant)
+                and isinstance(n.body[0].value.value, str)
+            ):
+                n.body = n.body[1:]
+
+        def visit_FunctionDef(self, n):
+            self.generic_visit(n)
+            self._strip(n)
+            return n
+
+        def visit_AsyncFunctionDef(self, n):
+            self.generic_visit(n)
+            self._strip(n)
+            return n
+
+        def visit_ClassDef(self, n):
+            self.generic_visit(n)
+            self._strip(n)
+            return n
+
+        def visit_Module(self, n):
+            self.generic_visit(n)
+            self._strip(n)
+            return n
+
+    try:
+        tree = ast.parse(raw)
+        tree = _DocstringStripper().visit(tree)
+        ast.fix_missing_locations(tree)
+        cleaned = ast.unparse(tree)
+    except Exception:  # fallback – never fail hard
+        cleaned = raw
+
+    # --- 3. dedent + drop comments / blanks -----------------------------
+    lines = textwrap.dedent(cleaned).splitlines()
+    lines = [ln for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
+
+    if len(lines) > max_lines:
+        lines = lines[:max_lines] + ["    # …trimmed…"]
+
+    return "\n".join(lines)
 
 
 def _path_context(unit, func_node: ast.AST, max_funcs: int = 3) -> str:
@@ -67,18 +126,37 @@ def _path_context(unit, func_node: ast.AST, max_funcs: int = 3) -> str:
 
         qname = unit.qualname(func_node)  # PythonASTUnit helper
         callers = list(ai_analyzer.callers_of(qname))[:max_funcs]
-        callees = list(ai_analyzer.callees_of(qname))[:max_funcs]
-
-        blocks: list[str] = []
-        for name in callers + callees:
+        callers_src = []
+        for name in callers:
             src_unit, node = ai_analyzer.source_of(name)  # (PythonASTUnit, ast.AST)
-            blocks.append(_snippet(node, src_unit.source))
+            callers_src.append(_snippet(node, src_unit.source))
 
-        if not blocks:
+        san_callees = set()
+        san_callee_blocks = []
+        for name in ai_analyzer.callees_of(qname):
+            if any(fn in name for fn in _SANITIZERS) or _SANITIZER_RE.search(name):
+                src_unit, node = ai_analyzer.source_of(name)
+                san_callees.add(name)
+                san_callee_blocks.append(_snippet(node, src_unit.source))
+
+        other_callees = [
+            c for c in ai_analyzer.callees_of(qname) if c not in san_callees
+        ][:max_funcs]
+
+        callees_src = san_callee_blocks
+        for name in other_callees:
+            src_unit, node = ai_analyzer.source_of(name)
+            callees_src.append(_snippet(node, src_unit.source))
+
+        if not callers_src and not callees_src:
             return ""
 
-        sep = "\n\n## ─── NEXT FUNCTION ─── ##\n"
-        return "\n\n### CALL-FLOW CONTEXT ###\n" + sep.join(blocks)
+        parts = ["\n### CALL-FLOW CONTEXT ###"]
+        if callers_src:
+            parts.append("\n\n# ⇧  DIRECT CALLERS\n" + "\n\n".join(callers_src))
+        if callees_src:
+            parts.append("\n\n# ⇩  DIRECT CALLEES\n" + "\n\n".join(callees_src))
+        return "\n".join(parts)
 
     except Exception as exc:
         logger.debug("llm_code_audit: context error – %s", exc)
@@ -151,6 +229,48 @@ def _debug_ancestry(node):
     return " -> ".join(chain)
 
 
+def _is_trivial_wrapper(
+    fn: ast.FunctionDef | ast.AsyncFunctionDef,
+    *,
+    src: str,
+) -> bool:
+    """
+    True **only when** the *cleaned* source of *fn* (with doc-strings,
+    comments and blank lines stripped) contains a **single** executable
+    statement that is one of:
+
+      • a bare call        →   ``foo(bar)``
+      • ``return``         →   ``return``
+      • ``return <Call>``  →   ``return do()``.
+
+    Anything longer – even an extra ``print()`` – is considered
+    non-trivial and must be audited.
+    """
+    try:
+        # Use the same cleaner that feeds the LLM so comments/doc-strings
+        # never influence the result.
+        cleaned = _snippet(fn, src, max_lines=999_999)  # keep full body
+        tree = ast.parse(cleaned)
+        body = (
+            tree.body[0].body
+            if isinstance(tree.body[0], (ast.FunctionDef, ast.AsyncFunctionDef))
+            else tree.body
+        )
+
+        if len(body) != 1:
+            return False
+
+        stmt = body[0]
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+            return True
+        if isinstance(stmt, ast.Return):
+            return stmt.value is None or isinstance(stmt.value, ast.Call)
+        return False
+    except Exception:
+        # On any parsing hiccup fall back to *not* skipping
+        return False
+
+
 @register("AI_LLM01", scope="node", node_types=(ast.Call,))
 def llm_audit(unit):
     call = unit._current
@@ -196,6 +316,12 @@ def llm_audit(unit):
     if unit.is_user_tainted(call) and _call_has_sanitised_args(call):
         return
 
+    if isinstance(
+        func_node, (ast.FunctionDef, ast.AsyncFunctionDef)
+    ) and _is_trivial_wrapper(func_node, src=unit.source):
+        logger.debug("llm_code_audit: trivial wrapper – skipped")
+        return
+
     # Obtain the module AST (attribute name differs across versions)
     tree = getattr(unit, "tree", getattr(unit, "_tree", None))
     if tree is None:
@@ -207,17 +333,33 @@ def llm_audit(unit):
 
     prompt = textwrap.dedent(
         f"""
-        You are a secure-coding assistant.
-
         ## Context
-        * Trusted sanitisers: {", ".join(sorted(_SANITIZERS))} and anything
-          matching /{_SANITIZER_RE.pattern}/
-        * If **all** user-controlled values reach the model only through those
-          sanitisers, reply with: {{ "issue": "clean" }}
+        You are a security expert reviewing Python source code for **OWASP Top-10 for LLM Applications** risks:
+        1. LLM01:2025 Prompt Injection
+        2. LLM02:2025 Sensitive Information Disclosure
+        3. LLM03:2025 Supply Chain
+        4. LLM04:2025 Data and Model Poisoning
+        5. LLM05:2025 Improper Output Handling
+        6. LLM06:2025 Excessive Agency
+        7. LLM07:2025 System Prompt Leakage
+        8. LLM08:2025 Vector and Embedding Weaknesses
+        9. LLM09:2025 Misinformation
+        10. LLM10:2025 Unbounded Consumption
 
-        ## Task
-        Identify OWASP GenAI risks in the code below. Respond with **single-line**
-        JSON containing "issue", "sev", "fix", "owasp" and optional "mitre".
+        You will receive:
+
+        • **LOCAL FUNCTION**  – the code to audit
+        • **CALL-FLOW CONTEXT** – snippets of its immediate callers / callees (for reference only)
+
+        ### NON-NEGOTIABLE RULES
+        1. If LOCAL FUNCTION is merely a thin wrapper (no extra logic), reply with `{{"issue": "clean"}}`.
+        2. Report **only** vulnerabilities that are **inside LOCAL FUNCTION itself**.
+        3. Ignore risks that exist *solely* in CALL-FLOW CONTEXT.
+
+        ### TASK
+        Return **exactly one line of JSON** with keys:<br>
+        `"issue" · "sev" · "fix" · "owasp" · ("mitre" optional)`.<br>
+        Use `"issue": "clean"` when no problem is present.
 
         ### LOCAL FUNCTION ###
         ```python
@@ -225,7 +367,7 @@ def llm_audit(unit):
         ```
 
         {flow_src}
-        """
+    """
     ).strip()
 
     logger.debug(
@@ -259,6 +401,13 @@ def llm_audit(unit):
         return
     _EMITTED.add(dedup)
 
+    logger.debug(
+        "llm_code_audit: found %s (%s) in %s:%s",
+        data.get("issue"),
+        data.get("sev"),
+        unit.path,
+        call.lineno,
+    )
     yield Finding(
         owasp_id=data.get("owasp", "Axx"),
         mitre=data.get("mitre", []),
