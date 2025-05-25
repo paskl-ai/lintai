@@ -33,7 +33,8 @@ def test_dsl_rule_hits(tmp_path):
     assert lines, f"Empty output: stderr={result.stderr!r}"
 
     try:
-        findings = json.loads(result.stdout)
+        result_obj = json.loads(result.stdout)
+        findings = result_obj["findings"]
     except Exception as e:
         pytest.fail(f"Could not parse JSON from output:\n{result.stdout}\nError: {e}")
 

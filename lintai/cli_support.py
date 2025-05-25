@@ -1,6 +1,6 @@
 # lintai/cli_support.py
 from __future__ import annotations
-import json, logging, os
+import logging, os
 from pathlib import Path
 from typing import Iterable, List
 
@@ -11,6 +11,7 @@ from lintai.core.loader import load_plugins
 from lintai.dsl.loader import load_rules
 from lintai.engine.python_ast_unit import PythonASTUnit
 from lintai.engine import initialise as _init_ai_engine
+from lintai.llm import budget
 
 _DEFAULT_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=_DEFAULT_FMT)
@@ -64,6 +65,8 @@ def maybe_load_env(env_path: Path | None) -> None:
 
         load_dotenv(dotenv_path=target, override=False)
         logger.info("Loaded provider settings from %s (python-dotenv)", target)
+        # reload budget manager to pick up new limits
+        budget.manager.reload()
         return
     except ModuleNotFoundError:
         pass  # fallback
@@ -72,8 +75,12 @@ def maybe_load_env(env_path: Path | None) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = map(str.strip, line.split("=", 1))
-        os.environ.setdefault(k, v)
+        os.environ[k] = v
     logger.info("Loaded provider settings from %s (fallback parser)", target)
+
+    # reload budget manager to pick up new limits
+    budget.manager.reload()
+    return
 
 
 def build_ast_units(path: Path) -> List[PythonASTUnit]:

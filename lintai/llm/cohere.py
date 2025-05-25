@@ -1,5 +1,7 @@
 import os, json, importlib.util
 from lintai.llm.base import LLMClient
+from lintai.llm.token_util import estimate_tokens
+from lintai.llm.errors import BudgetExceededError
 
 _spec = importlib.util.find_spec("cohere")
 cohere = importlib.util.module_from_spec(_spec) if _spec else None
@@ -25,12 +27,34 @@ class _CohereClient(LLMClient):
         self.client = cohere.Client(key)
         self.model = os.getenv("COHERE_MODEL", "command-r")
 
-    def ask(self, prompt, **kw):
+    def ask(
+        self, prompt: str, max_tokens: int = 256, **kw
+    ) -> str:  # kw: temperature, max_tokens ...
         try:
-            out = self.client.chat(
-                model=self.model, message=prompt, max_tokens=kw.get("max_tokens", 256)
+            # ①  budget check
+            self._preflight_budget(prompt, max_tokens)
+
+            # ②  call provider and get response
+            resp = self.client.chat(
+                model=self.model, message=prompt, max_tokens=max_tokens
             )
-            return out.text
+
+            # ③  extract usage for *real* accounting
+            usage = getattr(resp, "usage", None)
+            completion_tok = (
+                usage.completion_tokens
+                if usage
+                else estimate_tokens(resp.choices[0].message.content, self.model)
+            )
+            cost_usd = None  # OpenAI API v2 doesn’t return cost – leave None
+
+            # ④  commit to budget
+            self._post_commit_budget(completion_tok, cost_usd)
+
+            # ⑤  return the message content
+            return resp.text
+        except BudgetExceededError:
+            raise
         except Exception as exc:
             return json.dumps(
                 {

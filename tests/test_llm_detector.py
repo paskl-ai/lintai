@@ -16,6 +16,7 @@ def test_llm_detector_offline(tmp_path, monkeypatch):
     result = subprocess.run(
         ["lintai", "scan", str(src)], capture_output=True, text=True, check=True
     )
-    findings = json.loads(result.stdout.strip().splitlines()[-1])
+    result_obj = json.loads(result.stdout)
+    findings = result_obj["findings"]
     # dummy provider returns no JSON → detector yields nothing
     assert not findings
