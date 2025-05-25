@@ -10,6 +10,7 @@ from typer import Argument, Context, Option
 
 from lintai.cli_support import init_common
 from lintai.detectors import run_all
+from lintai.core import report
 import lintai.engine as _engine
 
 app = typer.Typer(
@@ -81,6 +82,9 @@ def scan_cmd(
         "-d",
         help="How many caller layers to mark as AI-related (default 2)",
     ),
+    output: Path = Option(
+        None, "--output", "-o", help="Write JSON output to file (default: stdout)"
+    ),
 ):
     _bootstrap(
         ctx,
@@ -92,10 +96,14 @@ def scan_cmd(
     )
 
     units = ctx.obj["units"]
-    findings = [f.to_dict() for u in units for f in run_all(u)]
+    findings = [f for u in units for f in run_all(u)]
 
-    typer.echo(json.dumps(findings, indent=2))
-    raise typer.Exit(1 if any(f["severity"] == "blocker" for f in findings) else 0)
+    # Save full report with LLM usage
+    report.write_scan_report(findings, output)
+
+    if output:
+        typer.echo(f"\n✅ Report written to {output}")
+    raise typer.Exit(1 if any(f.severity == "blocker" for f in findings) else 0)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -121,6 +129,9 @@ def ai_inventory_cmd(
         "--ai-call-depth",
         "-d",
         help="How many caller layers to mark as AI-related (default 2)",
+    ),
+    output: Path = Option(
+        None, "--output", "-o", help="Write JSON output to file (default: stdout)"
     ),
 ):
     _bootstrap(
@@ -164,7 +175,9 @@ def ai_inventory_cmd(
 
         inventory.append(record)
 
-    typer.echo(json.dumps(inventory, indent=2))
+    report.write_inventory_report(inventory, output)
+    if output:
+        typer.echo(f"\n✅ Inventory written to {output}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

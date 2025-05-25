@@ -14,7 +14,7 @@ def create():
     class _Dummy(LLMClient):
         is_dummy = True
 
-        def ask(self, prompt, **kw):
+        def ask(self, prompt, max_tokens: int = 256, **kw):
             return _OFFLINE_JSON
 
     return _Dummy()

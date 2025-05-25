@@ -377,7 +377,7 @@ def llm_audit(unit):
     try:
         reply = _CLIENT.ask(prompt, max_tokens=180)
     except Exception as exc:
-        logger.debug("llm_code_audit: provider error %s – skipped", exc)
+        logger.error("llm_code_audit: provider error %s – skipped", exc)
         return
 
     payload = _json_fragment(reply)
