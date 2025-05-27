@@ -1,85 +1,138 @@
+# lintai/ui/server.py
 from __future__ import annotations
-from pathlib import Path
-from datetime import datetime, UTC
+
 import json, logging, subprocess, tempfile, uuid
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional, Literal
+from pathlib import Path
+from typing import Any, Optional, Literal, TypedDict
 
 from fastapi import (
-    FastAPI,
     BackgroundTasks,
-    UploadFile,
-    Query,
+    FastAPI,
     HTTPException,
+    Query,
+    UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-# ── logging ────────────────────────────────────────────────────────────────
+# ───────────────────────── logging ──────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ── storage paths ──────────────────────────────────────────────────────────
+# ──────────────────── persistent folders ────────────────────
 DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
 DATA_DIR.mkdir(exist_ok=True)
+
 CONFIG_FILE = DATA_DIR / "config.json"
+RUNS_FILE = DATA_DIR / "runs.json"
 
 
-def _run_index() -> Path:
-    return DATA_DIR / "runs.json"
+# ──────────────────────── Pydantic models ───────────────────
+class ConfigModel(BaseModel):
+    """Values mirror the flags of the CLI so we can pass-through 1-to-1."""
+
+    source_path: str = Field(".", description="Default path to analyse")
+    ai_call_depth: int = Field(2, ge=0, description="--ai-call-depth")
+    log_level: str = Field("INFO", description="--log-level")
+    ruleset: Optional[str] | None = Field(None, description="--ruleset")
+    env_file: Optional[str] | None = Field(None, description="--env-file")
 
 
-def _load_runs():
-    return _load_json(_run_index(), [])
-
-
-def _save_runs(runs):
-    _run_index().write_text(json.dumps(runs, indent=2))
-
-
-def _load_json(path: Path, default):
-    if path.exists():
-        return json.loads(path.read_text())
-    return default
-
-
-# ── pydantic models (show up in Swagger) ───────────────────────────────────
 class RunType(str, Enum):
     scan = "scan"
     inventory = "inventory"
-
-
-class ConfigModel(BaseModel):
-    """Configuration persisted between sessions."""
-
-    source_path: str = Field(..., description="Default folder to analyse")
-    ai_call_depth: int = Field(2, ge=0, le=10)
-    ruleset: Optional[str] = None
 
 
 class RunSummary(BaseModel):
     run_id: str
     type: RunType
     created: datetime
-    status: str  # pending | done | error
+    status: Literal["pending", "done", "error"]
     path: str
 
 
 class ScanReport(BaseModel):
     type: Literal["scan"]
-    data: dict[str, Any]  # {"llm_usage":…, "findings":[…]}
+    data: dict[str, Any]
 
 
 class InventoryReport(BaseModel):
     type: Literal["inventory"]
-    data: dict[str, Any]  # {"nodes":[…], "edges":[…]}
+    data: dict[str, Any]
 
 
-# ── FastAPI setup ──────────────────────────────────────────────────────────
+# ───────────────────── helper functions ─────────────────────
+def _run_index() -> Path:
+    return RUNS_FILE
+
+
+def _read_json(path: Path, default):
+    return json.loads(path.read_text()) if path.exists() else default
+
+
+def _write_json(path: Path, obj: Any):
+    # make sure datetimes are serialisable
+    def _default(o):
+        return o.isoformat() if isinstance(o, datetime) else TypeError()
+
+    path.write_text(json.dumps(obj, indent=2, default=_default))
+
+
+# config helpers
+def _load_config() -> ConfigModel:
+    return ConfigModel.model_validate(_read_json(CONFIG_FILE, {}))
+
+
+def _save_config(cfg: ConfigModel):
+    _write_json(CONFIG_FILE, cfg.model_dump())
+
+
+# run-index helpers
+def _load_runs() -> list[RunSummary]:
+    raw = _read_json(RUNS_FILE, [])
+    return [RunSummary.model_validate(r) for r in raw]
+
+
+def _save_runs(runs: list[RunSummary]):
+    _write_json(RUNS_FILE, [r.model_dump() for r in runs])
+
+
+def _register_run(run: RunSummary):
+    runs = _load_runs()
+    runs.append(run)
+    _save_runs(runs)
+
+
+def _update_status(run_id: str, new_status: Literal["done", "error"]):
+    runs = _load_runs()
+    for r in runs:
+        if r.run_id == run_id:
+            r.status = new_status
+            break
+    _save_runs(runs)
+
+
+# argv builder (merges stored-config with overrides)
+def _cli_args(
+    path: str | None, depth: int | None, log: str | None, cfg: ConfigModel
+) -> list[str]:
+    return [
+        "-d",
+        str(depth if depth is not None else cfg.ai_call_depth),
+        "-l",
+        log if log is not None else cfg.log_level,
+        *([] if cfg.ruleset is None else ["-r", cfg.ruleset]),
+        *([] if cfg.env_file is None else ["-e", cfg.env_file]),
+    ] + ([path] if path else [cfg.source_path])
+
+
+# ───────────────────────── FastAPI app ──────────────────────
 app = FastAPI(title="Lintai UI", docs_url="/api/docs", redoc_url=None)
 
 app.add_middleware(
@@ -90,184 +143,170 @@ app.add_middleware(
 )
 
 
-# ── helpers ────────────────────────────────────────────────────────────────
-def _register_run(run_id: str, run_type: RunType, path: str):
-    runs = _load_runs()
-    runs.append(
-        {
-            "run_id": run_id,
-            "type": run_type,
-            "created": datetime.now(UTC).isoformat(),  # <-- serialisable str
-            "status": "pending",
-            "path": path,
-        }
-    )
-    _save_runs(runs)
-
-
-def _update_run_status(run_id: str, status: str):
-    runs = _load_runs()
-    for r in runs:
-        if r["run_id"] == run_id:
-            r["status"] = status
-            break
-    _save_runs(runs)
-
-
-def _kick_off_lintai(
-    tasks: BackgroundTasks, run_id: str, cmd: list[str], out_file: Path
-):
-    def _run():
-        try:
-            subprocess.run(cmd, check=True)
-            _update_run_status(run_id, "done")
-        except subprocess.CalledProcessError as exc:
-            logger.error("lintai command failed: %s", exc)
-            _update_run_status(run_id, "error")
-
-    tasks.add_task(_run)
-
-
-# ── API endpoints ──────────────────────────────────────────────────────────
+# ──────────────────────── health / config ───────────────────
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
 
 
-# ------------------------------------------------------------------ config
 @app.get("/api/config", response_model=ConfigModel)
-def get_config():
-    return _load_json(CONFIG_FILE, ConfigModel(source_path=".").model_dump())
+def get_cfg():
+    return _load_config()
 
 
 @app.post("/api/config", response_model=ConfigModel)
-def set_config(cfg: ConfigModel):
-    CONFIG_FILE.write_text(cfg.model_dump_json(indent=2))
+def set_cfg(cfg: ConfigModel):
+    _save_config(cfg)
     return cfg
 
 
-# ------------------------------------------------------------------ runs index
+# ───────────────────────── runs index ───────────────────────
 @app.get("/api/runs", response_model=list[RunSummary])
-def list_runs():
+def runs():
     return _load_runs()
 
 
-# ------------------------------------------------------------------ scan
+# ─────────────────────────── /scan ──────────────────────────
 @app.post("/api/scan", response_model=RunSummary)
-async def run_scan(
-    files: list[UploadFile],
-    tasks: BackgroundTasks,
-    depth: int = Query(2, description="ai_call_depth override"),
+async def scan(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = [],
+    path: str | None = Query(None),
+    depth: int | None = Query(None, ge=0),
+    log_level: str | None = Query(None),
 ):
+    cfg = _load_config()
     run_id = str(uuid.uuid4())
-    workdir = DATA_DIR / run_id
-    workdir.mkdir()
+    work = DATA_DIR / run_id
+    work.mkdir()
 
-    # save uploads
-    for f in files:
-        (workdir / f.filename).write_bytes(await f.read())
+    # store uploaded sources (optional workflow)
+    for up in files:
+        (work / up.filename).write_bytes(await up.read())
+    scan_target = str(work if files else (path or cfg.source_path))
 
-    out_json = workdir / "scan_report.json"
-    cmd = ["lintai", "scan", str(workdir), "--output", str(out_json), "-d", str(depth)]
-    _register_run(run_id, RunType.scan, str(workdir))
-    _kick_off_lintai(tasks, run_id, cmd, out_json)
-    return RunSummary(
+    out_json = work / "scan_report.json"
+    cmd = ["lintai", "scan", scan_target, "--output", str(out_json)] + _cli_args(
+        path=None, depth=depth, log=log_level, cfg=cfg
+    )
+
+    # async execution
+    def _job():
+        try:
+            subprocess.run(cmd, check=True)
+            _update_status(run_id, "done")
+        except subprocess.CalledProcessError as exc:
+            logger.error("scan failed: %s", exc)
+            _update_status(run_id, "error")
+
+    background_tasks.add_task(_job)
+
+    summary = RunSummary(
         run_id=run_id,
         type=RunType.scan,
         created=datetime.now(UTC),
         status="pending",
-        path=str(workdir),
+        path=scan_target,
     )
+    _register_run(summary)
+    return summary
 
 
-# ------------------------------------------------------------------ inventory
+# ──────────────────────── /inventory ────────────────────────
 @app.post("/api/inventory", response_model=RunSummary)
-def run_inventory(
-    path: str = Query(..., description="Path to analyse"),
-    tasks: BackgroundTasks = None,
-    depth: int = Query(2, description="ai_call_depth override"),
+def inventory(
+    background_tasks: BackgroundTasks,
+    path: str | None = Query(None),
+    depth: int | None = Query(None, ge=0),
+    log_level: str | None = Query(None),
 ):
+    cfg = _load_config()
     run_id = str(uuid.uuid4())
     out_json = DATA_DIR / f"{run_id}_inventory.json"
-    cmd = ["lintai", "ai-inventory", path, "--output", str(out_json), "-d", str(depth)]
-    _register_run(run_id, RunType.inventory, path)
-    _kick_off_lintai(tasks, run_id, cmd, out_json)
-    return RunSummary(
+
+    cmd = [
+        "lintai",
+        "ai-inventory",
+        path or cfg.source_path,
+        "--output",
+        str(out_json),
+    ] + _cli_args(None, depth, log_level, cfg)
+
+    def _job():
+        try:
+            subprocess.run(cmd, check=True)
+            _update_status(run_id, "done")
+        except subprocess.CalledProcessError as exc:
+            logger.error("inventory failed: %s", exc)
+            _update_status(run_id, "error")
+
+    background_tasks.add_task(_job)
+
+    summary = RunSummary(
         run_id=run_id,
         type=RunType.inventory,
         created=datetime.now(UTC),
         status="pending",
-        path=path,
+        path=path or cfg.source_path,
     )
+    _register_run(summary)
+    return summary
 
 
-# ------------------------------------------------------------------ results
+# ──────────────────────── /results/{id} ─────────────────────
 @app.get(
     "/api/results/{run_id}",
-    responses={
-        200: {"content": {"application/json": {}}},
-        404: {"model": None},
-    },
+    responses={200: {"content": {"application/json": {}}}, 404: {}},
 )
-def get_results(run_id: str):
-    runs = _load_runs()
-    meta = next((r for r in runs if r["run_id"] == run_id), None)
-    if not meta:
+def results(run_id: str):
+    run = next((r for r in _load_runs() if r.run_id == run_id), None)
+    if not run:
         raise HTTPException(404, "run_id not found")
 
-    if meta["type"] == RunType.scan:
+    if run.type is RunType.scan:
         file = DATA_DIR / run_id / "scan_report.json"
     else:
         file = DATA_DIR / f"{run_id}_inventory.json"
 
-    if not file.exists():
-        return {"status": "pending"}
-
-    return json.loads(file.read_text())
+    return {"status": "pending"} if not file.exists() else json.loads(file.read_text())
 
 
-# ---------------------------------------------------- scan filtering helper
+# ───────────────────── finding filter helper ───────────────
 @app.get("/api/results/{run_id}/filter")
-def filter_findings(
+def filter_scan(
     run_id: str,
-    severity: Optional[str] = None,
-    owasp: Optional[str] = None,
-    component: Optional[str] = None,
+    severity: str | None = None,
+    owasp_id: str | None = None,
+    component: str | None = None,
 ):
-    res = get_results(run_id)
-    if res.get("status") == "pending":
-        return res
-    if res.get("type") != "scan":
-        raise HTTPException(400, "Filtering only supported for scan results")
+    data = results(run_id)
+    if data.get("status") == "pending":
+        return data
+    if data["type"] != "scan":
+        raise HTTPException(400, "Not a scan run")
 
-    findings = res["data"]["findings"]
+    findings = data["data"]["findings"]
     if severity:
         findings = [f for f in findings if f["severity"] == severity]
-    if owasp:
-        findings = [f for f in findings if owasp in f.get("owasp_id", "")]
+    if owasp_id:
+        findings = [f for f in findings if owasp_id in f.get("owasp_id", "")]
     if component:
         findings = [f for f in findings if component in f.get("location", "")]
 
-    res["data"]["findings"] = findings
-    return res
+    data["data"]["findings"] = findings
+    return data
 
 
-# ---------------------------------------------------- inventory subgraph
+# ─────────────────── inventory sub-graph helper ─────────────
 @app.get("/api/inventory/{run_id}/subgraph")
-def subgraph(
-    run_id: str,
-    node: str,
-    depth: int = Query(1, ge=1, le=5),
-):
-    res = get_results(run_id)
-    if res.get("status") == "pending":
-        return res
-    if res.get("type") != "inventory":
-        raise HTTPException(400, "subgraph only supported for inventory runs")
+def subgraph(run_id: str, node: str, depth: int = Query(1, ge=1, le=5)):
+    data = results(run_id)
+    if data.get("status") == "pending":
+        return data
+    if data["type"] != "inventory":
+        raise HTTPException(400, "Not an inventory run")
 
-    # naïve exploration – shrink to neighbours within depth
-    nodes = res["data"]["nodes"]
-    edges = res["data"]["edges"]
+    nodes, edges = data["data"]["nodes"], data["data"]["edges"]
     frontier = {node}
     keep = set(frontier)
     for _ in range(depth):
@@ -276,16 +315,17 @@ def subgraph(
             for e in edges
             if e["source"] in frontier or e["target"] in frontier
         }
-        keep.update(frontier)
+        keep |= frontier
 
-    sub_nodes = [n for n in nodes if n["id"] in keep]
-    sub_edges = [e for e in edges if e["source"] in keep and e["target"] in keep]
-    return {"nodes": sub_nodes, "edges": sub_edges}
+    return {
+        "nodes": [n for n in nodes if n["id"] in keep],
+        "edges": [e for e in edges if e["source"] in keep and e["target"] in keep],
+    }
 
 
-# ------------------------------------------------------------------ static frontend
-frontend_dir = Path(__file__).parent / "frontend" / "dist"
-if frontend_dir.exists():
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+# ─────────────────── embed built React bundle ───────────────
+frontend = Path(__file__).parent / "frontend" / "dist"
+if frontend.exists():
+    app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
 else:
-    logger.warning("Frontend build not found at %s (UI disabled)", frontend_dir)
+    logger.warning("UI disabled – `%s` not found", frontend)
