@@ -16,6 +16,7 @@ def detect_prompt_injection(unit: SourceUnit):
     for fstr in unit.joined_fstrings():
         if unit.is_user_tainted(fstr) and not unit.has_call("sanitize", fstr):
             yield Finding(
+                detector_id="LLM01",
                 owasp_id="LLM01:2025 Prompt Injection",
                 mitre=["T1059"],
                 severity="blocker",
