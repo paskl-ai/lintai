@@ -65,7 +65,7 @@ lintai ai-inventory src/ --ai-call-depth 4
 
 ```bash
 lintai ui                  # http://localhost:8501/api/docs  (REST)
-pnpm -C lintai/ui/frontend dev   # React dev-server on :5173
+yarn -C lintai/ui/frontend start   # React dev-server on :5173
 ```
 
 ---

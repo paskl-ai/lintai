@@ -1,0 +1,139 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: Nunito, sans-serif;
+
+  --color-blue-50: #f0f9ff;
+  --color-blue-100: #e0f2fe;
+  --color-blue-200: #bae6fd;
+  --color-blue-300: #7dd3fc;
+  --color-blue-400: #38bdf8;
+  --color-blue-500: #0ea5e9;
+  --color-blue-600: #0284c7;
+  --color-blue-700: #0369a1;
+  --color-blue-800: #075985;
+  --color-blue-900: #0c4a6e;
+  --color-blue-950: #082f49;
+
+  --color-brown-50: #eef2ff;
+  --color-brown-100: #e0e7ff;
+  --color-brown-200: #c7d2fd;
+  --color-brown-300: #a5b4fc;
+  --color-brown-400: #818cf8;
+  --color-brown-500: #6366f1;
+  --color-brown-600: #4f46e5;
+  --color-brown-700: #4338ca;
+  --color-brown-800: #3730a3;
+  --color-brown-900: #312e81;
+  --color-brown-950: #1e1b4b;
+
+  --color-primary: #1e2939;
+  --color-primaryBg: #266dd924;
+
+  --color-neutral-500: #6a7282;
+  --color-neutral-100: #f3f4f6;
+  --color-neutral-50: #f9fafb;
+
+  --color-graphGreen: #88d5b3;
+  --color-orange: #ea9e99;
+  --color-purple: #c59ff3;
+
+  --color-card_bgLight: #f9fafb;
+
+  --color-translucent_grey: #6a72821f;
+
+  --color-black: #3a3a3a;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+  --color-update: #008cba;
+  --color-background: #f3efe5;
+  --color-green: #529c82;
+  --color-danger: #ffebe7;
+  --color-red: #db5c5c;
+  --color-ruddy-pink: #d59589;
+  --color-dark-brown: #3b464a;
+  --color-table-header: #f6f7f8;
+  --color-text-color: #1f2122;
+  --color-light-brown: #d9d9d9;
+  --color-gray: #707071;
+  --color-horizontal-row: #e2e3e6;
+  --color-header-black: #3a3a3a;
+  --color-btn_outline: #56686f;
+  --color-btn-act: #e38e49;
+  --color-input_outline: #aaadb1;
+  --color-overlay_hover: #e0f2ff;
+
+  --color-chart_green: #06a77d;
+  --color-chart_gold: #d4b07d;
+  --color-primary-black: #3a3a3a;
+  --color-button-red: #a65d53;
+
+  --shadow-card:
+    0px 1px 3px 2px rgba(0, 0, 0, 0.1), 0px 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    /* border-color: var(--color-gray-2/00, currentColor); */
+  }
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family:
+    source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}

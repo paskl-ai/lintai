@@ -15,7 +15,7 @@ Endpoints
 from __future__ import annotations
 
 import json, logging, subprocess, tempfile, uuid
-from datetime import datetime, UTC
+from datetime import datetime, timezone  # Replace UTC with timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -202,7 +202,7 @@ def _report_path(rid: str, kind: RunType) -> Path:
 app = FastAPI(title="Lintai UI", docs_url="/api/docs", redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173","http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -262,10 +262,10 @@ def runs():
 @app.post("/api/scan", response_model=RunSummary)
 async def scan(
     bg: BackgroundTasks,
-    files: list[UploadFile] = [],
-    path: str | None = None,
-    depth: int | None = None,
-    log_level: str | None = None,
+    files: list[UploadFile] = File(default=[]),              # ← mark these as coming from multipart/form-data
+    path:    str | None        = Query(None),                # ← explicit that it’s a query‐param
+    depth:   int | None        = Query(None, ge=0),
+    log_level: str | None      = Query(None),
 ):
     rid = str(uuid.uuid4())
     work = DATA_DIR / rid
@@ -287,7 +287,7 @@ async def scan(
     run = RunSummary(
         run_id=rid,
         type=RunType.scan,
-        created=datetime.now(UTC),
+        created=datetime.now(timezone.utc),  # Use timezone.utc instead of UTC
         status="pending",
         path=target,
     )
@@ -322,7 +322,7 @@ def inventory(
     run = RunSummary(
         run_id=rid,
         type=RunType.inventory,
-        created=datetime.now(UTC),
+        created=datetime.now(timezone.utc),  # Use timezone.utc instead of UTC
         status="pending",
         path=path or _load_cfg().source_path,
     )
