@@ -21,12 +21,17 @@
 
 import { Outlet } from 'react-router'
 import PublicHeader from '../components/header/public-header.component'
+import PrivateHeader from '../components/header/private-header.component'
 
 const DefaultLayout = () => {
   return (
     <>
-      <PublicHeader />
-      <Outlet />
+          <PrivateHeader userInfo={{email:'Team@lint.ai'}} key={'1'} />
+      <div className="p-4">
+        <div className="mt-14">
+          <Outlet />
+        </div>
+      </div>
     </>
   )
 }

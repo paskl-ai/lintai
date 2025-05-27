@@ -1,146 +1,227 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { FaPlus } from 'react-icons/fa6'
 import { FiMenu } from 'react-icons/fi'
-import { useNavigate } from 'react-router'
-import { User } from '../../redux/services/User/user.slice'
+import {
+  TbArrowLeft,
 
+  TbKey,
+  TbLayoutDashboard,
+
+  TbServer,
+
+} from 'react-icons/tb'
+import { useNavigate } from 'react-router'
+
+import { useAppDispatch, useAppSelector } from '../../redux/services/store'
+import { removeUser, User } from '../../redux/services/User/user.slice'
 
 
 const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
   const navigate = useNavigate()
+  const [addVisible, setAddVisible] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const isActive = (path: string) => location.pathname === path
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const user = useAppSelector((state) => state.user.user)
+  const headerButtonConfig: Record<
+    string,
+    {
+      label: string
+      onClick?: () => void
+      component?: React.ReactNode
+      title: string
+    }
+  > = {
+    '/': {
+      label: 'Add New Repo',
+      title: 'Reports',
+      onClick: async () => navigate('/'),
+    },
+
+
+  }
+  console.log(user, 'user details')
+  // Helper function to get header button config matching the current path
+  const getHeaderButtonConfig = (currentPath: string) => {
+    for (const route in headerButtonConfig) {
+      if (route.includes(':')) {
+        // Convert route with dynamic segments to a regex, e.g., '/servers/:id' -> /^\/servers\/[^/]+$/
+        const regex = new RegExp('^' + route.replace(/:[^/]+/g, '[^/]+') + '$')
+        if (regex.test(currentPath)) {
+          return headerButtonConfig[route]
+        }
+      } else if (route === currentPath) {
+        return headerButtonConfig[route]
+      }
+    }
+    return undefined
+  }
+
+  // useEffect(() => {
+  //   const handleClickOutside = () => {
+  //     setSidebarOpen(false)
+  //   }
+  //   document.addEventListener('click', handleClickOutside)
+  //   return () => {
+  //     document.removeEventListener('click', handleClickOutside)
+  //   }
+  // }, [])
+
+  // Get the current path from the browser's location
+  const currentPath = location.pathname
+  const isNested = currentPath.split('/').filter(Boolean).length > 1
+
+  const headerButton = getHeaderButtonConfig(currentPath)
+
+  const dispatch = useAppDispatch()
+  const isActive = (path: string) => currentPath === path
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const handleLogout = () => {
+    dispatch(removeUser())
+  }
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setDropdownOpen(false)
+      }
+
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target as Node)
+      ) {
+        setSidebarOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const handleSidebarClick = (e: React.MouseEvent<HTMLUListElement>) => {
+    if ((e.target as HTMLElement).closest('button')) {
+      setSidebarOpen(false)
+    }
+  }
 
   return (
-    <>
+    <div>
       {/* Header */}
-      <nav className="fixed top-0 z-40 w-full bg-white px-4 py-3 sm:pl-64">
+      <nav className="x-10 fixed top-0 z-20 w-full rounded-tl-3xl text-white bg-primary px-4 py-3 sm:pl-40">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            {/* Mobile Sidebar Toggle */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="mr-4 text-2xl text-gray-700 sm:hidden"
-            >
-              <FiMenu />
-            </button>
-            <h1 className="ml-5 text-xl font-bold tracking-wide text-gray-800">
-              {userInfo?.email}
-            </h1>
+          <div className="flex">
+            <div className="flex items-center">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="mr-4 text-2xl text-gray-700 sm:hidden"
+              >
+                <FiMenu />
+              </button>
+            </div>
+            <div className="flex items-center justify-center sm:ml-10">
+              {isNested && (
+                <button
+                  onClick={async () => navigate(-1)}
+                  className="text-black-700 mr-4 text-2xl"
+                >
+                  <TbArrowLeft />
+                </button>
+              )}
+
+              <h2 className="text-2xl font-bold">{headerButton?.title}</h2>
+            </div>
           </div>
-
           <div className="flex items-center space-x-4">
-            <button className="bg-btn-act rounded-lg px-4 py-2 text-white">
-              <span className="text-white">+</span>
-              <span className="text-white">Add New Server</span>
-            </button>
-
-            {/* Profile Icon */}
-            <button
-              className="flex items-center space-x-4"
-              onClick={async () => navigate('/profile')}
-            >
-              <img
-                className="h-8 w-8 rounded-full"
-                src="https://flowbite.com/docs/images/people/profile-picture-5.jpg"
-                alt="User Profile"
-              />
-            </button>
+            {headerButton?.onClick && (
+              <button
+                onClick={headerButton.onClick}
+                className="bg-btn-act flex flex-row items-center rounded-lg px-4 py-2 text-base font-bold text-white"
+              >
+                <FaPlus className="mr-2" />
+                {headerButton.label}
+              </button>
+            )}
+   
           </div>
         </div>
       </nav>
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 border-r bg-gray-100 transition-transform ${
+        ref={sidebarRef}
+        className={`fixed top-0 left-0 z-50 h-full w-40 bg-gray-100 transition-transform ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } sm:translate-x-0`}
+        } sm:translate-x-0 md:translate-x-0`}
       >
         <div className="flex h-full flex-col justify-between p-4">
-          {/* Logo */}
           <div>
-            <h2 className="text-primary mb-6 text-2xl font-bold">
-              LintAi
-            </h2>
-            {/* Navigation */}
-            <ul className="space-y-2 text-gray-700">
+            <div className="mb-6">
+              <h2 className="text-primary mb-3 text-2xl font-bold">
+                Lint Ai
+              </h2>
+             
+            </div>
+
+            <ul
+              className="space-y-2 text-gray-700"
+              onClick={handleSidebarClick}
+            >
+     
               <li>
                 <button
-                  className="bg-primaryBg flex w-full justify-between rounded-lg px-4 py-2 text-left font-bold text-blue-800"
-                  onClick={async () => navigate('/add-server')}
-                >
-                  Add New Server
-                  <span>+</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={async () => navigate('/dashboard')}
-                  className={`w-full rounded-lg px-4 py-2 text-left font-normal text-neutral-500 hover:bg-gray-200 ${
-                    isActive('/dashboard') && 'text-primary'
+                  onClick={async () => navigate('/')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${
+                    !isActive('/')
+                      ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
+                      : 'bg-primary text-white'
                   }`}
                 >
+                  <TbLayoutDashboard
+                    size={24}
+                    className="mr-2"
+                  />
                   Dashboard
                 </button>
               </li>
               <li>
                 <button
-                  onClick={async () => navigate('/servers')}
-                  className={`w-full rounded-lg px-4 py-2 text-left font-normal text-neutral-500 hover:bg-gray-200 ${
-                    isActive('/servers') && 'text-primary'
+                  onClick={async () => navigate('/inventory')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${
+                    !isActive('/inventory')
+                      ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
+                      : 'bg-primary text-white'
                   }`}
                 >
-                  Servers
+                  <TbServer size={24} className="mr-2"  />
+                  Inventory
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={async () => navigate('/ssh-keys')}
-                  className={`w-full rounded-lg px-4 py-2 text-left font-normal text-neutral-500 hover:bg-gray-200 ${
-                    isActive('/ssh-keys') && 'text-primary'
-                  }`}
-                >
-                  SSH Keys
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={async () => navigate('/users')}
-                  className={`w-full rounded-lg px-4 py-2 text-left font-normal text-neutral-500 hover:bg-gray-200 ${
-                    isActive('/users') && 'text-primary'
-                  }`}
-                >
-                  Users
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={async () => navigate('/billing')}
-                  className={`w-full rounded-lg px-4 py-2 text-left font-normal text-neutral-500 hover:bg-gray-200 ${
-                    isActive('/billing') && 'text-primary'
-                  }`}
-                >
-                  Billing
-                </button>
-              </li>
+        
+         
+
             </ul>
           </div>
-
-          {/* Footer */}
           <div className="text-sm text-gray-600">
-            <p>Copyright LintAi™</p>
-            <p>Version 1.2.0.5</p>
-            <div className="mt-2 flex space-x-4">
+            <p>©Lint Ai</p>
+            <p>Version 0.9.1.0</p>
+            <div className="mt-2 space-x-4">
               <a href="/privacy" className="hover:underline">
                 Privacy Policy
               </a>
-              <a href="/terms" className="hover:underline">
-                Terms & Conditions
-              </a>
             </div>
+            <a href="/terms" className="mt-2 hover:underline">
+              Terms & Conditions
+            </a>
           </div>
         </div>
       </aside>
-    </>
+      {addVisible && headerButton?.component}
+    </div>
   )
 }
 

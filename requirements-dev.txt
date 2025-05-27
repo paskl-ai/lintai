@@ -12,3 +12,7 @@ openai>=1.0
 anthropic
 google-generativeai
 cohere
+
+
+
+fastapi

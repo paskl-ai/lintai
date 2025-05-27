@@ -22,6 +22,8 @@ from typing import Any, Literal, Optional
 
 from fastapi import (
     FastAPI,
+    File,
+    Form,
     BackgroundTasks,
     UploadFile,
     HTTPException,
@@ -47,7 +49,6 @@ RUNS_FILE = DATA_DIR / "runs.json"
 CONFIG_JSON = DATA_DIR / "config.json"  # *UI* prefs (depth, log-level …)
 CFG_ENV = DATA_DIR / "config.env"  # non-secret
 SECR_ENV = DATA_DIR / "secrets.env"  # API keys (0600)
-
 
 # ──────────────────────── Pydantic models ─────────────────────
 class ConfigModel(BaseModel):
@@ -262,21 +263,30 @@ def runs():
 @app.post("/api/scan", response_model=RunSummary)
 async def scan(
     bg: BackgroundTasks,
-    files: list[UploadFile] = File(default=[]),              # ← mark these as coming from multipart/form-data
-    path:    str | None        = Query(None),                # ← explicit that it’s a query‐param
-    depth:   int | None        = Query(None, ge=0),
-    log_level: str | None      = Query(None),
+    files:     list[UploadFile] = File(default=[]),
+    path:      str | None        = Form(None),
+    depth:     int | None        = Form(None),
+    log_level: str | None        = Form(None),
 ):
-    rid = str(uuid.uuid4())
+    # 1) create a fresh workspace for this run
+    rid  = str(uuid.uuid4())
     work = DATA_DIR / rid
     work.mkdir()
 
+    # 2) save each UploadFile, recreating any nested folders
     for up in files:
-        (work / up.filename).write_bytes(await up.read())
+        dest = work / up.filename                # up.filename may be "src/App.tsx"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(await up.read())
 
+    # 3) decide what to scan: the uploaded dir, or the provided path
     target = str(work if files else (path or _load_cfg().source_path))
-    out = _report_path(rid, RunType.scan)
+    # scan_target = str(work) if files else (path or _load_cfg().source_path)
 
+    reported_path = path or "." if files else scan_target
+
+    # 4) build the CLI command & kick it off in background
+    out = _report_path(rid, RunType.scan)
     cmd = (
         ["lintai", "scan", target, "--output", str(out)]
         + _common_flags(depth, log_level)
@@ -284,16 +294,16 @@ async def scan(
     )
     _kick(cmd, rid, bg)
 
+    # 5) record & return the pending run
     run = RunSummary(
         run_id=rid,
         type=RunType.scan,
-        created=datetime.now(timezone.utc),  # Use timezone.utc instead of UTC
+        created=datetime.now(timezone.utc),
         status="pending",
-        path=target,
+        path=reported_path,
     )
     _add_run(run)
     return run
-
 
 # ─────────── /inventory ────────
 @app.post("/api/inventory", response_model=RunSummary)
@@ -340,7 +350,33 @@ def results(rid: str):
     if not run:
         raise HTTPException(404)
     fp = _report_path(rid, run.type)
-    return {"status": "pending"} if not fp.exists() else json.loads(fp.read_text())
+    # return {"status": "pending"} if not fp.exists() else json.loads(fp.read_text())
+    if not fp.exists():
+        return {"status": "pending"}
+
+    data = json.loads(fp.read_text())
+    print(f"Processing finding location data: {data}")  # Debug log
+
+    # strip the staging-dir prefix off each finding.location
+    if run.type is RunType.scan :
+
+        base = (DATA_DIR / rid).resolve()
+        print(f"Processing finding location data: {data}")  # Debug log
+
+        for f in data["findings"]:
+            loc = f.get("location")
+            if not loc:
+                continue
+            try:
+                # convert to Path and make it relative to base
+                rel = Path(loc).resolve().relative_to(base)
+                f["location"] = str(rel)
+            except Exception:
+                # if something doesn’t match, leave it unchanged
+                pass
+
+    return data
+
 
 
 # ---- findings filter helper

@@ -7,6 +7,10 @@ import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { resetJob, startJob } from '../../redux/services/ServerStatus/server.status.slice'
 import { QueryKey } from '../../api/QueryKey'
 import CommonButton from '../../components/buttons/CommonButton'
+import EntityFilter from '../../components/filters/EntityFilter'
+import { TbChartInfographic, TbGraph, TbNetwork } from 'react-icons/tb'
+import { useNavigate } from 'react-router'
+
 
 interface Finding {
     owasp_id: string
@@ -27,70 +31,35 @@ interface LLMUsage {
         requests: number
     }
 }
-const dummyResult = {
-    "llm_usage": {
-        "tokens_used": 0,
-        "usd_used": 0.0,
-        "requests": 0,
-        "limits": {
-            "tokens": 50000,
-            "usd": 10.0,
-            "requests": 500
-        }
-    },
-    "findings": [
-        {
-            "owasp_id": "LLM01:2025 Prompt Injection",
-            "mitre": ["T1059"],
-            "severity": "blocker",
-            "message": "Unsanitized user input string used in LLM prompt",
-            "location": "examples/chatbot.py",
-            "line": 8,
-            "fix": "Wrap variable in sanitize() or escape()"
-        },
-        {
-            "owasp_id": "LLM01:2025 Prompt Injection",
-            "mitre": ["T1059"],
-            "severity": "blocker",
-            "message": "Unsanitized user input string used in LLM prompt",
-            "location": "examples/hello_world_ai.py",
-            "line": 13,
-            "fix": "Wrap variable in sanitize() or escape()"
-        },
-        {
-            "owasp_id": "PY01",
-            "mitre": ["T1059"],
-            "severity": "high",
-            "message": "Use of builtin eval() is unsafe",
-            "location": "examples/hello_world_ai.py",
-            "line": 20,
-            "fix": "Replace eval() with ast.literal_eval() or safer code"
-        },
-        {
-            "owasp_id": "SEC02",
-            "mitre": ["T1552"],
-            "severity": "medium",
-            "message": "Hard-coded API key in source code",
-            "location": "src/config.py",
-            "line": 42,
-            "fix": "Move API key to an environment variable"
-        },
-        {
-            "owasp_id": "STYLE01",
-            "mitre": [],
-            "severity": "low",
-            "message": "Trailing whitespace detected",
-            "location": "README.md",
-            "line": 120,
-            "fix": "Remove extra spaces at end of line"
-        }
-    ]
-}
+const entityTypes = [
+    { label: 'Code Module', value: 'CodeModule' },
+    { label: 'LLM Call', value: 'LLMCall' },
+    { label: 'LLM Model', value: 'LLMModel' },
+    { label: 'Tool', value: 'Tool' },
+    { label: 'API', value: 'API' },
+    { label: 'Database', value: 'Database' },
+    { label: 'Vector DB', value: 'VectorDB' },
+    { label: 'File Access', value: 'File' },
+    { label: 'Prompt', value: 'Prompt' },
+];
+
 const Dashboard = () => {
     //   const [llmUsage, setLLMUsage] = useState<LLMUsage | null>(null)
     //   const [findings, setFindings] = useState<Finding[]>([])
+    const navigate = useNavigate()
+
     const [expandedFiles, setExpandedFiles] = useState<string[]>([])
     const [severityFilter, setSeverityFilter] = useState<string[]>([])
+    const [entityFilter, setEntityFilter] = useState<string[]>([]);
+    const handleEntityFilterChange = (value: string) => {
+        setEntityFilter((prev) =>
+            prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value]
+        );
+    };
+
+    const clearEntityFilters = () => {
+        setEntityFilter([]);
+    };
     const [searchQuery, setSearchQuery] = useState('')
     const [sortOrder, setSortOrder] = useState('a-z')
     const dispatch = useAppDispatch()
@@ -238,10 +207,15 @@ const Dashboard = () => {
         </span>
     )
 
+    const handleNetworkView = () => {
+        navigate('/data-flow')
+        // Navigate to the network view page
+        // window.location.href = '/graph/data-flow-visualise'
+    }
     return (
-        <div className="flex">
+        <div className="flex  sm:ml-40">
             {/* Sidebar */}
-            <aside className="w-64 bg-white shadow-md p-6 border-r h-screen">
+            <aside className="w-50 bg-white  p-6 border-r h-screen">
                 <h2 className="text-xl font-semibold mb-6 text-gray-800">Filters</h2>
                 <div className="mb-8">
                     <h3 className=" font-bold mb-3 text-gray-700">Severity</h3>
@@ -262,13 +236,16 @@ const Dashboard = () => {
                             />
                         </div>
                     ))}
-                    <button
-                        className="font-bold text-primary mt-4 hover:underline"
-                        onClick={() => setSeverityFilter([])}
-                    >
-                        Clear filters
-                    </button>
+                 
                 </div>
+                <EntityFilter
+                    entityTypes={entityTypes}
+                    selectedFilters={entityFilter}
+                    onFilterChange={handleEntityFilterChange}
+                    onClearFilters={()=>{
+                        clearEntityFilters()
+                    clearEntityFilters()}}
+                />
             </aside>
 
             {/* Main Content */}
@@ -360,7 +337,10 @@ const Dashboard = () => {
                                         )}
                                     </button>
                                     <span className="font-bold">{location}</span>
-                                    <div className="flex space-x-2">
+                              
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                <div className="flex space-x-2">
                                         {getSeverityChip(
                                             'B',
                                             findings.filter((f) => f.severity === 'blocker').length,
@@ -382,16 +362,16 @@ const Dashboard = () => {
                                             'border-2 border-green-500 text-black'
                                         )}
                                     </div>
-                                </div>
-                                <div className="flex items-center space-x-4">
+
+
                                     <button className="text-blue-500 text-sm">View Report</button>
-                                    <FiSettings className="text-gray-500" />
+                                    <TbNetwork className="text-primary0" size={30} onClick={handleNetworkView} />
                                 </div>
                             </div>
                             {expandedFiles.includes(location) && (
                                 <div className="ml-8 mt-4">
                                     {findings.map((finding, index) => (
-                                        <div key={index} className="flex items-center justify-between py-2">
+                                        <div key={index} className={`flex items-center       ${index > 0 ? "border-t border-gray-300" : ""}  justify-between py-2`}>
                                             <div className="flex items-center space-x-4">
                                                 <span className="text-sm">{finding.owasp_id}</span>
                                                 <span
