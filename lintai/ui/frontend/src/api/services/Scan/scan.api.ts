@@ -6,7 +6,9 @@ class Scan {
         return response.data
     }
 
-    async startScan(data: { target: string; options: Record<string, any> }) {
+    async startScan(data:FormData
+        //  { target: string; options: Record<string, any> }
+        ) {
         const response = await api.post('/scan', data) // Updated endpoint
         return response.data
     }
