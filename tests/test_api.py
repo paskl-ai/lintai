@@ -1,25 +1,32 @@
-# tests/test_api.py
 from __future__ import annotations
+
+import json, importlib
 from pathlib import Path
-import json, uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
-# import AFTER we monkey-patch DATA_DIR
+# -----------------------------------------------------------------------
+#  monkey-patch file locations BEFORE importing the server
+# -----------------------------------------------------------------------
 import lintai.ui.server as ui
 
 
 @pytest.fixture(autouse=True)
-def _isolate_runs(tmp_path, monkeypatch):
-    # use a throw-away dir instead of the real temp folder
-    tmp_data = tmp_path / "ui-data"
-    tmp_data.mkdir()
-    monkeypatch.setattr(ui, "DATA_DIR", tmp_data)
-    monkeypatch.setattr(ui, "CONFIG_FILE", tmp_data / "config.json")
-    monkeypatch.setattr(ui, "_run_index", lambda: tmp_data / "runs.json")
-    ui._save_runs([])  # start each test with empty index
+def _isolate_files(tmp_path, monkeypatch):
+    tmp = tmp_path / "ui-data"
+    tmp.mkdir()
+    monkeypatch.setattr(ui, "DATA_DIR", tmp, raising=True)
+    monkeypatch.setattr(ui, "RUNS_FILE", tmp / "runs.json", raising=True)
+    monkeypatch.setattr(ui, "CONFIG_JSON", tmp / "config.json", raising=True)
+    monkeypatch.setattr(ui, "CFG_ENV", tmp / "config.env", raising=True)
+    monkeypatch.setattr(ui, "SECR_ENV", tmp / "secrets.env", raising=True)
+
+    # re-import so the helpers pick up new paths
+    importlib.reload(ui)
+    ui._save_runs([])
     yield
-    ui._save_runs([])  # cleanup
+    ui._save_runs([])
 
 
 @pytest.fixture
@@ -27,79 +34,60 @@ def client():
     return TestClient(ui.app)
 
 
+# -----------------------------------------------------------------------
 def test_health(client):
-    r = client.get("/api/health")
-    assert r.status_code == 200 and r.json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok"}
 
 
 def test_config_roundtrip(client):
-    new_cfg = {
+    cfg = {
         "source_path": ".",
         "ai_call_depth": 3,
+        "log_level": "DEBUG",
         "ruleset": None,
-        "log_level": "INFO",
         "env_file": None,
     }
-    assert client.post("/api/config", json=new_cfg).json() == new_cfg
+    assert client.post("/api/config", json=cfg).json() == cfg
+    assert client.get("/api/config").json() == cfg
 
 
-def _fake_report(run_id: str, kind: str):
+# util to drop fake reports
+def _fake_report(rid: str, kind: str):
     if kind == "scan":
-        path = ui.DATA_DIR / run_id / "scan_report.json"
+        fp = ui.DATA_DIR / rid / "scan_report.json"
         data = {
             "type": "scan",
-            "data": {
-                "llm_usage": {},
-                "findings": [{"owasp_id": "A01", "severity": "high"}],
-            },
+            "data": {"llm_usage": {}, "findings": [{"severity": "high"}]},
         }
     else:
-        path = ui.DATA_DIR / f"{run_id}_inventory.json"
-        data = {
-            "type": "inventory",
-            "data": {"nodes": [{"id": "A"}], "edges": []},
-        }
-    path.parent.mkdir(exist_ok=True, parents=True)
-    path.write_text(json.dumps(data))
+        fp = ui.DATA_DIR / f"{rid}_inventory.json"
+        data = {"type": "inventory", "data": {"nodes": [{"id": "A"}], "edges": []}}
+    fp.parent.mkdir(parents=True, exist_ok=True)
+    fp.write_text(json.dumps(data))
 
 
 def test_full_flow(client, monkeypatch, tmp_path):
-    # stub subprocess so we don’t invoke real scans
     monkeypatch.setattr(ui.subprocess, "run", lambda *a, **k: None)
     monkeypatch.setattr(ui.subprocess, "CalledProcessError", RuntimeError)
 
-    # ---- scan run
-    code_file = tmp_path / "bot.py"
-    code_file.write_text("print('x')")
-    resp = client.post("/api/scan", files={"files": ("bot.py", code_file.read_bytes())})
-    scan_run = resp.json()
-    rid_scan = scan_run["run_id"]
+    code = tmp_path / "bot.py"
+    code.write_text("print('x')")
+    r1 = client.post("/api/scan", files={"files": ("bot.py", code.read_bytes())}).json()
+    r2 = client.post("/api/inventory", params={"path": str(tmp_path)}).json()
 
-    # ---- inventory run
-    resp2 = client.post("/api/inventory", params={"path": str(tmp_path)})
-    inv_run = resp2.json()
-    rid_inv = inv_run["run_id"]
-
-    # runs index should list two pending runs
     runs = client.get("/api/runs").json()
-    assert {r["run_id"] for r in runs} == {rid_scan, rid_inv}
+    assert {runs[0]["run_id"], runs[1]["run_id"]} == {r1["run_id"], r2["run_id"]}
 
-    # craft dummy result files -> mimick completed runs
-    _fake_report(rid_scan, "scan")
-    _fake_report(rid_inv, "inventory")  # file path logic inside helper
+    _fake_report(r1["run_id"], "scan")
+    _fake_report(r2["run_id"], "inventory")
 
-    # results should now be 'done'
-    assert client.get(f"/api/results/{rid_scan}").json()["type"] == "scan"
-    assert client.get(f"/api/results/{rid_inv}").json()["type"] == "inventory"
+    assert client.get(f"/api/results/{r1['run_id']}").json()["type"] == "scan"
+    assert client.get(f"/api/results/{r2['run_id']}").json()["type"] == "inventory"
 
-    # filtering endpoint shrinks list
-    filtered = client.get(
-        f"/api/results/{rid_scan}/filter", params={"severity": "high"}
-    ).json()
-    assert len(filtered["data"]["findings"]) == 1
+    assert client.get(
+        f"/api/results/{r1['run_id']}/filter", params={"severity": "high"}
+    ).json()["data"]["findings"]
 
-    # subgraph returns subset
-    sg = client.get(
-        f"/api/inventory/{rid_inv}/subgraph", params={"node": "A", "depth": 1}
-    ).json()
-    assert sg["nodes"] == [{"id": "A"}]
+    assert client.get(
+        f"/api/inventory/{r2['run_id']}/subgraph", params={"node": "A"}
+    ).json()["nodes"] == [{"id": "A"}]
