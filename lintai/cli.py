@@ -1,7 +1,6 @@
 # lintai/cli.py
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import List
 
@@ -12,6 +11,7 @@ from lintai.cli_support import init_common
 from lintai.detectors import run_all
 from lintai.core import report
 import lintai.engine as _engine
+import uvicorn
 
 app = typer.Typer(
     help="Lintai – shift-left GenAI security scanner",
@@ -178,6 +178,25 @@ def ai_inventory_cmd(
     report.write_inventory_report(inventory, output)
     if output:
         typer.echo(f"\n✅ Inventory written to {output}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ui  ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+@app.command("ui", help="Launch browser UI")
+def ui_cmd(
+    port: int = Option(8501, "--port", "-p", help="Port to listen on"),
+    reload: bool = Option(False, "--reload", help="Auto-reload on code changes"),
+):
+    """
+    Start FastAPI + React UI.
+    """
+    uvicorn.run(
+        "lintai.ui.server:app",
+        host="127.0.0.1",
+        port=port,
+        reload=reload,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

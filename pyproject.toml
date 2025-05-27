@@ -23,6 +23,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "pathspec",
     "tiktoken",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9"
 ]
 
 [project.optional-dependencies]
@@ -31,6 +34,7 @@ anthropic   = ["anthropic>=0.21,<1.0"]
 gemini      = ["google-generativeai>=0.5"]
 cohere      = ["cohere>=5.1"]
 all-llms    = ["lintai[openai,anthropic,gemini,cohere]"]
+ui          = ["fastapi", "uvicorn[standard]", "python-multipart"]
 
 # nice to have: put dev tools here too
 dev = [
