@@ -133,6 +133,9 @@ def ai_inventory_cmd(
     output: Path = Option(
         None, "--output", "-o", help="Write JSON output to file (default: stdout)"
     ),
+    graph: bool = Option(
+        False, "--graph", "-g", help="Include full call-graph payload"
+    ),
 ):
     _bootstrap(
         ctx,
@@ -148,7 +151,8 @@ def ai_inventory_cmd(
         ctx.fail("AI engine not initialised – internal error")
 
     depth = ana.call_depth
-    inventory: List[dict] = []
+    inventory: list[dict] | None = [] if not graph else None
+    graph_records: list[dict] | None = [] if graph else None
 
     for sink in ana.ai_calls:
         record = {
@@ -157,25 +161,35 @@ def ai_inventory_cmd(
             "callers": [],
         }
 
-        # walk *upwards* through the call-graph (breadth-first)
-        frontier = {
-            fn for fn, callees in ana.call_graph.items() if sink.fq_name in callees
-        }
-        seen = set()
-        lvl = 0
-        while frontier and lvl < depth:
-            record["callers"].extend(sorted(frontier))
-            seen.update(frontier)
+        if not graph:  # inventory mode
+            # walk *upwards* through the call-graph (breadth-first)
             frontier = {
-                parent
-                for parent, callees in ana.call_graph.items()
-                if callees & frontier and parent not in seen
+                fn for fn, callees in ana.call_graph.items() if sink.fq_name in callees
             }
-            lvl += 1
+            seen = set()
+            lvl = 0
+            while frontier and lvl < depth:
+                record["callers"].extend(sorted(frontier))
+                seen.update(frontier)
+                frontier = {
+                    parent
+                    for parent, callees in ana.call_graph.items()
+                    if callees & frontier and parent not in seen
+                }
+                lvl += 1
 
-        inventory.append(record)
+            inventory.append(record)
+        else:  # graph mode
+            elements = ana.graph_for_sink(sink, depth)
+            graph_records.append(
+                {"sink": sink.fq_name, "at": record["at"], "elements": elements}
+            )
 
-    report.write_inventory_report(inventory, output)
+    if graph:
+        report.write_graph_inventory_report(graph_records, output)
+    else:
+        report.write_simple_inventory_report(inventory, output)
+
     if output:
         typer.echo(f"\n✅ Inventory written to {output}")
 

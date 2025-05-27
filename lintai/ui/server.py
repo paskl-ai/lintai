@@ -311,6 +311,7 @@ def inventory(
             "lintai",
             "ai-inventory",
             path or _load_cfg().source_path,
+            "--graph",  # always ask for graph for the UI
             "--output",
             str(out),
         ]
