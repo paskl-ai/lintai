@@ -27,6 +27,7 @@ from fastapi import (
     HTTPException,
     Body,
     Query,
+    Depends,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +39,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 log = logging.getLogger(__name__)
+
+# ──────────────────── workspace root ──────────────────────────
+ROOT = Path.home()  # limit browsing to this subtree
 
 # ────────────────── persistent workspace ────────────────────
 DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
@@ -99,6 +103,15 @@ class EnvPayload(BaseModel):
 
 
 # ─────────────────── tiny helpers ───────────────────────────
+
+
+def _safe(path: str) -> Path:
+    p = (ROOT / Path(path).expanduser()).resolve()
+    if not p.is_relative_to(ROOT):
+        raise HTTPException(403, "outside workspace")
+    return p
+
+
 def _json_load(path: Path, default):
     return json.loads(path.read_text()) if path.exists() else default
 
@@ -212,6 +225,28 @@ app.add_middleware(
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# ─────────── file system ──────
+@app.get("/api/fs")
+def list_dir(path: str = ""):
+    """
+    List files in a directory, relative to the workspace root.
+    If no path is given, lists the workspace root.
+    """
+    p = _safe(path or ".")
+    if not p.is_dir():
+        raise HTTPException(400, "not a directory")
+    items = [
+        {
+            "name": f.name,
+            "path": str(p / f.name).removeprefix(str(ROOT) + "/"),
+            "dir": f.is_dir(),
+        }
+        for f in sorted(p.iterdir())
+        if not f.name.startswith(".")  # ignore dotfiles
+    ]
+    return {"cwd": str(p), "items": items}
 
 
 # ─────────── config (JSON) ─────
