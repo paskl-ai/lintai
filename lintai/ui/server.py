@@ -41,7 +41,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ──────────────────── workspace root ──────────────────────────
-ROOT = Path(os.getenv("LINTAI_UI_ROOT", Path.cwd()))
+ROOT = Path(os.getenv("LINTAI_SRC_CODE_ROOT", Path.cwd()))
 if not ROOT.is_dir():
     raise RuntimeError(f"Workspace root {ROOT} does not exist or is not a directory")
 # ────────────────── persistent workspace ────────────────────
