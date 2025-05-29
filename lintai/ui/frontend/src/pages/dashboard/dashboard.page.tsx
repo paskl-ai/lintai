@@ -142,7 +142,7 @@ const Dashboard = () => {
         input.multiple = true
 
         input.onchange = (e) => {
-            // console.log(e.target.files, 'selected files')
+            console.log(e.target.files, 'selected files')
 
             const files = Array.from((e.target as HTMLInputElement).files || [])
 
@@ -214,7 +214,7 @@ const Dashboard = () => {
     }
     return (
         <div className="flex  sm:ml-40">
-            {/* Sidebar */}
+            {/* Sidebar  filters */}
             <aside className="w-50 bg-white  p-6 border-r h-screen">
                 <h2 className="text-xl font-semibold mb-6 text-gray-800">Filters</h2>
                 <div className="mb-8">

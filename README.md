@@ -29,6 +29,9 @@
 
 ### 1 · Install
 
+
+
+
 ```bash
 # end users
 pip install lintai
