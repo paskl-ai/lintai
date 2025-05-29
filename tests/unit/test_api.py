@@ -13,24 +13,40 @@ import lintai.ui.server as ui
 
 
 @pytest.fixture(autouse=True)
-def _isolate_files(tmp_path, monkeypatch):
-    tmp = tmp_path / "ui-data"
-    tmp.mkdir()
-    monkeypatch.setattr(ui, "DATA_DIR", tmp, raising=True)
-    monkeypatch.setattr(ui, "RUNS_FILE", tmp / "runs.json", raising=True)
-    monkeypatch.setattr(ui, "CONFIG_JSON", tmp / "config.json", raising=True)
-    monkeypatch.setattr(ui, "CFG_ENV", tmp / "config.env", raising=True)
-    monkeypatch.setattr(ui, "SECR_ENV", tmp / "secrets.env", raising=True)
+def _sandbox(tmp_path, monkeypatch):
+    """
+    Set up a temporary workspace for the UI tests.
+      • redirect every file location (DATA_DIR, …)
+      • replace ui.ROOT with a temp workspace
+      • finally reload the module so the FastAPI routes pick up
+        the new constants.
+    """
+    # 1 — tmp workspace for the fake source tree
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    (ws / "foo").mkdir()
+    (ws / "foo" / "bar.txt").write_text("x")
+    (ws / "top.txt").write_text("y")
 
-    # re-import so the helpers pick up new paths
-    importlib.reload(ui)
-    ui._save_runs([])
-    yield
-    ui._save_runs([])
+    # 2 — tmp area for the UI’s own state
+    ui_store = tmp_path / "ui-data"
+    ui_store.mkdir()
+
+    # 3 — reload so the FastAPI router uses the patched constants
+    new_ui = importlib.reload(ui)
+
+    # re-apply all monkey-patches on the freshly-loaded module
+    monkeypatch.setattr(new_ui, "ROOT", ws, raising=False)
+    monkeypatch.setattr(new_ui, "DATA_DIR", ui_store, raising=True)
+    monkeypatch.setattr(new_ui, "RUNS_FILE", ui_store / "runs.json", raising=True)
+    monkeypatch.setattr(new_ui, "CONFIG_JSON", ui_store / "config.json", raising=True)
+    monkeypatch.setattr(new_ui, "CFG_ENV", ui_store / "config.env", raising=True)
+    monkeypatch.setattr(new_ui, "SECR_ENV", ui_store / "secrets.env", raising=True)
+    new_ui._save_runs([])  # ensure clean state
 
 
 @pytest.fixture
-def client():
+def client(_sandbox):
     return TestClient(ui.app)
 
 
@@ -91,3 +107,22 @@ def test_full_flow(client, monkeypatch, tmp_path):
     assert client.get(
         f"/api/inventory/{r2['run_id']}/subgraph", params={"node": "A"}
     ).json()["nodes"] == [{"id": "A"}]
+
+
+def test_list_root(client, tmp_path):
+    resp = client.get("/api/fs")
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert Path(data["cwd"]).name == ""
+    assert {i["name"] for i in data["items"]} == {"foo", "top.txt"}
+
+
+def test_list_subdir(client):
+    resp = client.get("/api/fs", params={"path": "foo"})
+    assert {i["name"] for i in resp.json()["items"]} == {"bar.txt"}
+
+
+def test_block_escape(client):
+    # Path outside ROOT should be rejected
+    assert client.get("/api/fs", params={"path": "../"}).status_code == 403

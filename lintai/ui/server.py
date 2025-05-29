@@ -14,7 +14,7 @@ Endpoints
 
 from __future__ import annotations
 
-import json, logging, subprocess, tempfile, uuid
+import os, json, logging, subprocess, tempfile, uuid
 from datetime import datetime, timezone  # Replace UTC with timezone
 from enum import Enum
 from pathlib import Path
@@ -29,6 +29,7 @@ from fastapi import (
     HTTPException,
     Body,
     Query,
+    Depends,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +42,10 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ──────────────────── workspace root ──────────────────────────
+ROOT = Path(os.getenv("LINTAI_SRC_CODE_ROOT", Path.cwd()))
+if not ROOT.is_dir():
+    raise RuntimeError(f"Workspace root {ROOT} does not exist or is not a directory")
 # ────────────────── persistent workspace ────────────────────
 DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
 DATA_DIR.mkdir(exist_ok=True)
@@ -100,6 +105,15 @@ class EnvPayload(BaseModel):
 
 
 # ─────────────────── tiny helpers ───────────────────────────
+
+
+def _safe(path: str) -> Path:
+    p = (ROOT / Path(path).expanduser()).resolve()
+    if not p.is_relative_to(ROOT):
+        raise HTTPException(403, f"Can't go outside workspace {ROOT}")
+    return p
+
+
 def _json_load(path: Path, default):
     return json.loads(path.read_text()) if path.exists() else default
 
@@ -215,6 +229,31 @@ def health():
     return {"status": "ok"}
 
 
+# ─────────── file system ──────
+@app.get("/api/fs")
+def list_dir(path: str | None = None):
+    """
+    List files in a directory, relative to the workspace root.
+    If no path is given, lists the workspace root.
+    """
+    p = _safe(path or ROOT)
+    if not p.is_dir():
+        raise HTTPException(400, "not a directory")
+    items = [
+        {
+            "name": f.name,
+            "path": str(p / f.name).removeprefix(str(ROOT) + "/"),
+            "dir": f.is_dir(),
+        }
+        for f in sorted(p.iterdir())
+        if not f.name.startswith(".")  # ignore dotfiles
+    ]
+    return {
+        "cwd": "" if p == ROOT else str(p.relative_to(ROOT)),
+        "items": items,
+    }
+
+
 # ─────────── config (JSON) ─────
 @app.get("/api/config", response_model=ConfigModel)
 def cfg_get():
@@ -321,6 +360,7 @@ def inventory(
             "lintai",
             "ai-inventory",
             path or _load_cfg().source_path,
+            "--graph",  # always ask for graph for the UI
             "--output",
             str(out),
         ]

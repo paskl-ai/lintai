@@ -64,6 +64,7 @@ def _load_one(rule: dict):
         code = _extract_text(node)
         if code and _cre.search(code):
             yield Finding(
+                detector_id=f"Rule {nid}",
                 owasp_id=_r.get("owasp_id", nid),
                 severity=_r.get("severity", "info"),
                 mitre=_r.get("mitre", []),

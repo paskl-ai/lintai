@@ -271,7 +271,7 @@ def _is_trivial_wrapper(
         return False
 
 
-@register("AI_LLM01", scope="node", node_types=(ast.Call,))
+@register("AI_DETECTOR01", scope="node", node_types=(ast.Call,))
 def llm_audit(unit):
     call = unit._current
 
@@ -409,6 +409,7 @@ def llm_audit(unit):
         call.lineno,
     )
     yield Finding(
+        detector_id="AI_DETECTOR01",
         owasp_id=data.get("owasp", "Axx"),
         mitre=data.get("mitre", []),
         severity=str(data.get("sev", "info")).lower(),
