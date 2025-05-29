@@ -114,7 +114,7 @@ def test_list_root(client, tmp_path):
     assert resp.status_code == 200
 
     data = resp.json()
-    assert Path(data["cwd"]).name == "workspace"
+    assert Path(data["cwd"]).name == ""
     assert {i["name"] for i in data["items"]} == {"foo", "top.txt"}
 
 

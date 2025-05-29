@@ -14,7 +14,7 @@ Endpoints
 
 from __future__ import annotations
 
-import json, logging, subprocess, tempfile, uuid
+import os, json, logging, subprocess, tempfile, uuid
 from datetime import datetime, UTC
 from enum import Enum
 from pathlib import Path
@@ -41,8 +41,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ──────────────────── workspace root ──────────────────────────
-ROOT = Path.home()  # limit browsing to this subtree
-
+ROOT = Path(os.getenv("LINTAI_UI_ROOT", Path.cwd()))
+if not ROOT.is_dir():
+    raise RuntimeError(f"Workspace root {ROOT} does not exist or is not a directory")
 # ────────────────── persistent workspace ────────────────────
 DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
 DATA_DIR.mkdir(exist_ok=True)
@@ -108,7 +109,7 @@ class EnvPayload(BaseModel):
 def _safe(path: str) -> Path:
     p = (ROOT / Path(path).expanduser()).resolve()
     if not p.is_relative_to(ROOT):
-        raise HTTPException(403, "outside workspace")
+        raise HTTPException(403, f"Can't go outside workspace {ROOT}")
     return p
 
 
@@ -229,12 +230,12 @@ def health():
 
 # ─────────── file system ──────
 @app.get("/api/fs")
-def list_dir(path: str = ""):
+def list_dir(path: str | None = None):
     """
     List files in a directory, relative to the workspace root.
     If no path is given, lists the workspace root.
     """
-    p = _safe(path or ".")
+    p = _safe(path or ROOT)
     if not p.is_dir():
         raise HTTPException(400, "not a directory")
     items = [
@@ -246,7 +247,10 @@ def list_dir(path: str = ""):
         for f in sorted(p.iterdir())
         if not f.name.startswith(".")  # ignore dotfiles
     ]
-    return {"cwd": str(p), "items": items}
+    return {
+        "cwd": "" if p == ROOT else str(p.relative_to(ROOT)),
+        "items": items,
+    }
 
 
 # ─────────── config (JSON) ─────
