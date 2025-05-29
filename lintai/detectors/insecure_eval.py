@@ -17,6 +17,7 @@ def detect_eval_call(unit):
         logger.debug("PY01 running on %s:%s", unit.path, call.lineno)
 
         yield Finding(
+            detector_id="PY01",
             owasp_id="PY01",
             mitre=["T1059"],
             severity="high",

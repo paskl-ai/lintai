@@ -6,6 +6,7 @@ from typing import List, Optional, Any
 
 @dataclass
 class Finding:
+    detector_id: str
     owasp_id: str
     mitre: List[str]
     severity: str

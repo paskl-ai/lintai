@@ -20,6 +20,7 @@ def detect_insecure_output(unit: SourceUnit):
             unit, "is_model_response", lambda x: False
         )(call.argument(0)):
             yield Finding(
+                detector_id="LLM02",
                 owasp_id="LLM02",
                 mitre=["T1059.004"],
                 severity="warn",

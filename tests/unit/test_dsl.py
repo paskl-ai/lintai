@@ -1,10 +1,16 @@
 import subprocess, json, pathlib, os
 import pytest
 
-ROOT = pathlib.Path(__file__).parents[1]
+ROOT = pathlib.Path(
+    subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    ).stdout.strip()
+)
 
 
 def test_dsl_rule_hits(tmp_path):
+    assert (ROOT / "lintai/dsl/rules").exists(), "DSL ruleset path does not exist"
+
     code = (
         'secret = "hunter2"\n'
         'prompt = f"My password is {secret}"\n'

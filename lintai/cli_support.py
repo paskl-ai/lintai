@@ -28,29 +28,42 @@ for n in _NOISY_HTTP_LOGGERS:
 
 
 # ------------------------------------------------------------------ utils
-def _load_ignore() -> pathspec.PathSpec:
-    for candidate in (".lintaiignore", ".gitignore"):
-        p = Path(candidate)
-        if p.is_file():
-            logger.info("Loading ignore patterns from %s", p)
-            return pathspec.PathSpec.from_lines(
-                "gitwildmatch", p.read_text().splitlines()
-            )
-    # no ignore files – empty spec
-    logger.info("No .lintaiignore or .gitignore found. Will not ignore any files.")
+def _load_ignore(search_root: Path) -> pathspec.PathSpec:
+    candidates = []
+
+    # if scanning a file, use its directory
+    if search_root.is_file():
+        candidates.append(search_root.parent)
+    else:
+        candidates.append(search_root)
+
+    # also try the current working directory
+    candidates.append(Path.cwd())
+
+    # look for .lintaiignore or .gitignore in the candidates
+    for name in (".lintaiignore", ".gitignore"):
+        for base in candidates:
+            p = base / name
+            if p.is_file():
+                logger.info("Loading ignore patterns from %s", p)
+                return pathspec.PathSpec.from_lines(
+                    "gitwildmatch", p.read_text().splitlines()
+                )
+
+    logger.info(
+        "No .lintaiignore or .gitignore found in %s or CWD. Will not ignore any files.",
+        candidates,
+    )
     return pathspec.PathSpec.from_lines("gitwildmatch", [])
 
 
-_IGNORE = _load_ignore()
-
-
-def iter_python_files(root: Path) -> Iterable[Path]:
+def iter_python_files(root: Path, ignore_spec: pathspec.PathSpec) -> Iterable[Path]:
     if root.is_file():
         if root.suffix == ".py":
             yield root
         return
     for p in root.rglob("*.py"):
-        if _IGNORE.match_file(p.relative_to(root).as_posix()):
+        if ignore_spec.match_file(p.relative_to(root).as_posix()):
             continue
         yield p
 
@@ -83,9 +96,9 @@ def maybe_load_env(env_path: Path | None) -> None:
     return
 
 
-def build_ast_units(path: Path) -> List[PythonASTUnit]:
+def build_ast_units(path: Path, ignore_spec: pathspec.PathSpec) -> List[PythonASTUnit]:
     units: list[PythonASTUnit] = []
-    for fp in iter_python_files(path):
+    for fp in iter_python_files(path, ignore_spec):
         try:
             units.append(PythonASTUnit(fp, fp.read_text(encoding="utf-8")))
         except UnicodeDecodeError:
@@ -111,8 +124,10 @@ def init_common(
 
     maybe_load_env(env_file)
 
+    ignore_spec = _load_ignore(path)
+
     # AST + AI engine
-    units = build_ast_units(path)
+    units = build_ast_units(path, ignore_spec)
     _init_ai_engine(units, depth=ai_call_depth)
 
     load_plugins()
@@ -120,4 +135,7 @@ def init_common(
         load_rules(ruleset)
 
     # make them available to the command via Typer's context obj
-    ctx.obj = {"units": units}
+    ctx.obj = {
+        "units": units,
+        "ignore_spec": ignore_spec,
+    }
