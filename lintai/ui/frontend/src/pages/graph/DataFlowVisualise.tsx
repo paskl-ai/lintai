@@ -1,36 +1,84 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { useLocation } from 'react-router';
 import CytoscapeGraph from '../../components/cytoscapegraph/CytoscapeGraph';
-const nodes = [
-    { data: { id: '1', label: 'agent_core.py', type: 'CodeModule' } },
-    { data: { id: '2', label: 'OpenAI API Call', type: 'LLMCall' } },
-    { data: { id: '3', label: 'gpt-4-turbo', type: 'LLMModel' } },
-    { data: { id: '4', label: 'search_tool.py', type: 'CodeModule' } },
-    { data: { id: '5', label: 'Web Search Tool', type: 'Tool' } },
-    { data: { id: '6', label: 'Google Search API', type: 'API' } },
-    { data: { id: '7', label: 'vector_db_manager.py', type: 'CodeModule' } },
-    { data: { id: '8', label: 'Pinecone Index', type: 'VectorDB' } },
-    { data: { id: '9', label: 'Summarization Prompt', type: 'Prompt' } },
-    { data: { id: '10', label: 'config.yaml', type: 'File' } },
-];
 
-const edges = [
-    { data: { source: '1', target: '2', label: 'invokes' } },
-    { data: { source: '2', target: '3', label: 'uses model' } },
-    { data: { source: '2', target: '9', label: 'uses prompt' } },
-    { data: { source: '1', target: '5', label: 'uses tool' } },
-    { data: { source: '4', target: '5', label: 'defines tool' } },
-    { data: { source: '5', target: '6', label: 'calls api' } },
-    { data: { source: '1', target: '8', label: 'interacts with' } },
-    { data: { source: '7', target: '8', label: 'manages' } },
-    { data: { source: '1', target: '10', label: 'reads config' } },
-];
+interface DataFlowVisualiseProps {
+  records?: {
+    elements:{ nodes?: any[];
+        edges?: any[];}
+   
+  };
+}
 
-const DataFlowVisualise = () => {
-    return (
-        <div className="flex  sm:ml-40 fill h-screen w-full flex-col items-center justify-center p-4">
-            <CytoscapeGraph nodes={nodes} edges={edges}  />
-        </div>
+const DataFlowVisualise: React.FC<DataFlowVisualiseProps> = ({ records }) => {
+  const location = useLocation();
+//   const { state } = location as { state: { record: any } };
+  const { record } = location.state || {};
+  const nodes: any[] = record?.nodes || records?.elements.nodes||[];
+  const edges: any[] = record?.edges ||records?.elements.edges|| [];
+console.log(records, 'Nodes and Edges');
+  // Derive unique entity types directly from node data
+  const entityTypes = useMemo(() => {
+    const types = Array.from(
+      new Set(nodes.map(n => n.data.type).filter(Boolean))
     );
+    // Map to objects for label/value
+    return types.map(type => ({
+      label: type,
+      value: type
+    }));
+  }, [nodes]);
+
+  console.log(entityTypes, 'Entity Types');
+  // State for selected entity filters
+  const [entityFilter, setEntityFilter] = useState<string[]>([]);
+
+  // Toggle filter selection
+  const handleEntityFilterChange = (value: string) => {
+    setEntityFilter(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    );
+  };
+
+  // Filter nodes: if filters applied, only keep matching types
+  const filteredNodes = useMemo(() => {
+    if (entityFilter.length === 0) return nodes;
+    return nodes.filter(n => entityFilter.includes(n.data.type));
+  }, [nodes, entityFilter]);
+
+  // Filter edges: both ends must remain
+  const allowedIds = useMemo(
+    () => new Set(filteredNodes.map(n => n.data.id)),
+    [filteredNodes]
+  );
+  const filteredEdges = useMemo(
+    () => edges.filter(e => allowedIds.has(e.data.source) && allowedIds.has(e.data.target)),
+    [edges, allowedIds]
+  );
+
+  return (
+    <div className="flex flex-col h-screen w-full p-0">
+      {/* Dynamic horizontal filter bar */}
+    {entityTypes?.length>0&&  <div className="flex flex-wrap items-center space-x-4 mb-4 bg-white p-3 rounded shadow">
+        {entityTypes?.map(et => (
+          <label key={et.value} className="inline-flex items-center space-x-1">
+            <input
+              type="checkbox"
+              className="form-checkbox h-4 w-4 text-primary focus:ring-primary"
+              checked={entityFilter.includes(et.value)}
+              onChange={() => handleEntityFilterChange(et.value)}
+            />
+            <span className="text-sm text-gray-700">{et.label}</span>
+          </label>
+        ))}
+      </div>}
+
+      {/* Graph container */}
+      <div className="flex-grow">
+        <CytoscapeGraph nodes={filteredNodes} edges={filteredEdges} />
+      </div>
+    </div>
+  );
 };
 
 export default DataFlowVisualise;

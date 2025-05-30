@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { FiChevronDown, FiChevronRight, FiSearch, FiSettings, FiFilter, FiFolder } from 'react-icons/fi'
-import { ScanService } from '../../api/services/Scan/scan.api'
+import { scanInventoryDTO, ScanService, startScanDTO } from '../../api/services/Scan/scan.api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-toastify'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
@@ -10,7 +10,7 @@ import CommonButton from '../../components/buttons/CommonButton'
 import EntityFilter from '../../components/filters/EntityFilter'
 import { TbChartInfographic, TbGraph, TbNetwork } from 'react-icons/tb'
 import { useNavigate } from 'react-router'
-
+import FileSystemPage from '../filesystem/filesystem.page'
 
 interface Finding {
     owasp_id: string
@@ -44,8 +44,6 @@ const entityTypes = [
 ];
 
 const Dashboard = () => {
-    //   const [llmUsage, setLLMUsage] = useState<LLMUsage | null>(null)
-    //   const [findings, setFindings] = useState<Finding[]>([])
     const navigate = useNavigate()
 
     const [expandedFiles, setExpandedFiles] = useState<string[]>([])
@@ -66,17 +64,16 @@ const Dashboard = () => {
     const [scanPath, setScanPath] = useState<string>('');
     const { jobId: runId, isProcessing } = useAppSelector(state => state.serverStatus)
     const queryClient = useQueryClient()
+    const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState<boolean>(false)
+    const [fileSearchQuery, setFileSearchQuery] = useState<string>('')
+
+    const handleFileSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFileSearchQuery(e.target.value)
+    }
+
     // 1️⃣ Mutation to start a scan
     const { mutate: startScan, isPending: isPendingStartServer } = useMutation({
-        mutationFn: async (body: FormData) => {
-            //   const res = await  ScanService.startScan({
-            //     target: path,
-            //     options: {
-            //       include: ['*.py', '*.js', '*.ts', '*.java'],
-            //       exclude: ['node_modules', 'vendor'],
-            //     },
-            //   })
-
+        mutationFn: async (body:startScanDTO ) => {
             const res = await ScanService.startScan(body)
             return res
         },
@@ -103,82 +100,68 @@ const Dashboard = () => {
         },
     })
 
+
     console.log(runId)
     const {
         data: scans,
         isFetching: isFetchingScan,
-
-        // isInitialLoading: isInitialLoading,
-        // isError: isErrorServers,
     } = useQuery({
         queryKey: [QueryKey.JOB],
         queryFn: async () => {
             const res = await ScanService.getResults(runId!!)
 
-            if (res?.findings) {
+            if (res?.data||res?.findings) {
                 dispatch(resetJob())
             }
 
             return res
-        }, // non-null assertion if you're sure id is defined
+        },
         initialData: [],
         refetchOnMount: true,
         refetchOnWindowFocus: false,
         refetchInterval: isProcessing ? 3000 : false,
         enabled: !!runId,
-        // Only run if `id` is available
     })
-
-
 
     // Derived state from query
     const llmUsage = scans?.llm_usage;
     const findings: Finding[] = (scans?.findings as Finding[]) ?? [];
 
-    const handleFolderSelection = () => {
-        const input = document.createElement('input')
-        input.type = 'file'
-            ; (input as any).webkitdirectory = true
-        input.multiple = true
+    const handleFolderSelection = (path:string) => {
+        // const input = document.createElement('input')
+        // input.type = 'file'
+        //     ; (input as any).webkitdirectory = true
+        // input.multiple = true
 
-        input.onchange = (e) => {
-            console.log(e.target.files, 'selected files')
+        // input.onchange = (e) => {
+        //     console.log(e.target.files, 'selected files')
 
-            const files = Array.from((e.target as HTMLInputElement).files || [])
+        //     const files = Array.from((e.target as HTMLInputElement).files || [])
 
-            if (!files.length) return
+        //     if (!files.length) return
 
-            // derive "ui/frontend/dist" from "ui/frontend/dist/index.html"
-            const rel = files[0].webkitRelativePath
-            const segments = rel.split('/')
-            segments.pop()
-            const folderRel = segments.join('/')
+        //     const rel = files[0].webkitRelativePath
+        //     const segments = rel.split('/')
+        //     segments.pop()
+        //     const folderRel = segments.join('/')
 
-            const form = new FormData();
-            files.forEach(f => form.append("files", f));
-            form.append("path", "my/src");
-            form.append("depth", "2");
-            form.append("log_level", "DEBUG");
+        //     const form = new FormData();
+        //     files.forEach(f => form.append("files", f));
+        //     form.append("path", "my/src");
+        //     form.append("depth", "2");
+        //     form.append("log_level", "DEBUG");
 
+        //     setScanPath(folderRel)
+        //     startScan(form)
+        // }
 
+        // input.click()
+        console.log(path, 'selected path')
+const body={
+    path: path
+}
+        startScan(body)
 
-
-
-            setScanPath(folderRel)
-
-            //   startScan(folderRel)
-
-
-            startScan(form)
-
-
-
-
-
-
-        }
-
-        input.click()
     }
 
     const toggleExpand = (filePath: string) => {
@@ -187,7 +170,7 @@ const Dashboard = () => {
         )
     }
 
-    const filteredFindings = findings.filter((finding:Finding) => {
+    const filteredFindings = findings.filter((finding: Finding) => {
         const matchesSeverity = severityFilter.length === 0 || severityFilter.includes(finding.severity)
         const matchesSearch =
             finding.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -195,7 +178,7 @@ const Dashboard = () => {
         return matchesSeverity && matchesSearch
     })
 
-    const groupedFindings = filteredFindings?.reduce((acc: { [x: string]: Finding[] }, finding:Finding) => {
+    const groupedFindings = filteredFindings?.reduce((acc: { [x: string]: Finding[] }, finding: Finding) => {
         if (!acc[finding.location]) acc[finding.location] = []
         acc[finding.location].push(finding)
         return acc
@@ -207,55 +190,44 @@ const Dashboard = () => {
         </span>
     )
 
-    const handleNetworkView = () => {
-        navigate('/data-flow')
-        // Navigate to the network view page
-        // window.location.href = '/graph/data-flow-visualise'
-    }
+   
+
     return (
-        <div className="flex  sm:ml-40">
-            {/* Sidebar  filters */}
-            <aside className="w-50 bg-white  p-6 border-r h-screen">
+        <div className="flex sm:ml-40">
+            {/* Sidebar filters */}
+            {/* <aside className="w-50 bg-white p-6 border-r h-screen">
                 <h2 className="text-xl font-semibold mb-6 text-gray-800">Filters</h2>
-                <div className="mb-8">
-                    <h3 className=" font-bold mb-3 text-gray-700">Severity</h3>
+             
+             
+            </aside> */}
+
+            {/* Main Content */}
+            <main className="flex-1 p-6">
+                {/* Top Bar */}
+                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-row gap-2 items-center">
+                    <h3 className="font-bold mb-3 text-gray-700">Severity</h3>
                     {['blocker', 'high', 'medium', 'low'].map((severity) => (
                         <div key={severity} className="flex items-center justify-between mb-3">
-                            <label className="text-sm capitalize text-gray-600">{severity}</label>
-                            <input
-                                type="checkbox"
-                                className="form-checkbox h-4 w-4 text-primary focus:ring-primary"
-                                checked={severityFilter.includes(severity)}
-                                onChange={() =>
+                            <button
+                                className={`px-4 py-2 rounded flex items-center border ${
+                                    severityFilter.includes(severity)
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-white text-primary border-primary'
+                                }`}
+                                onClick={() =>
                                     setSeverityFilter((prev) =>
                                         prev.includes(severity)
                                             ? prev.filter((s) => s !== severity)
                                             : [...prev, severity]
                                     )
                                 }
-                            />
+                            >
+                                {severity.charAt(0).toUpperCase() + severity.slice(1)}
+                            </button>
                         </div>
                     ))}
-                 
                 </div>
-                <EntityFilter
-                    entityTypes={entityTypes}
-                    selectedFilters={entityFilter}
-                    onFilterChange={handleEntityFilterChange}
-                    onClearFilters={()=>{
-                        clearEntityFilters()
-                    clearEntityFilters()}}
-                />
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 p-6">
-                {/* Top Bar */}
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center space-x-4">
-                        {/* <FiFilter className="text-gray-500" />
-            <button className="text-blue-500 text-sm">Reset scan</button> */}
-                    </div>
                     <div className="flex items-center space-x-4">
                         <div className="relative">
                             <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
@@ -263,65 +235,52 @@ const Dashboard = () => {
                                 type="text"
                                 placeholder="Search files..."
                                 className="pl-10 pr-4 py-2 border rounded w-64"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                value={fileSearchQuery}
+                                onChange={handleFileSearchChange}
                             />
                         </div>
                         <CommonButton
                             className="bg-primary text-white px-4 py-2 rounded flex items-center"
-                            onClick={handleFolderSelection}
-                            loading={isProcessing}
-                        >
+                            onClick={() => setIsFileSystemModalOpen(true)}
+                     loading={isProcessing}
+                     >
                             <FiFolder className="mr-2" />
-                            Select Folder
+                            Open File
                         </CommonButton>
-                        <div>
-                            <span className="text-sm">Sort by</span>
-                            <select
-                                className="ml-2 border rounded px-2 py-1"
-                                value={sortOrder}
-                                onChange={(e) => setSortOrder(e.target.value)}
-                            >
-                                <option value="a-z">A-Z</option>
-                                <option value="severity">By Severity</option>
-                            </select>
-                        </div>
                     </div>
                 </div>
 
-                {/* LLM Usage Summary */}
-                {llmUsage &&
+                {/* File System Modal */}
+                {isFileSystemModalOpen && (
+                    <div className="fixed inset-0  flex justify-center items-center z-50">
+                        <div className="w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
+                        
+                            <div className="flex-1 overflow-y-auto p-4">
+                                <FileSystemPage setIsModalOpen={setIsFileSystemModalOpen} handleScan={(e)=>handleFolderSelection(e)} />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
+                {/* LLM Usage Summary */}
+                {llmUsage && (
                     <div className="grid h-fit grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {/* Total Running Servers */}
                         <div className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4">
                             <h3 className="text-lg font-semibold text-gray-800">Tokens used</h3>
-
                             <p className="mt-2 text-3xl font-bold text-gray-900">
                                 {llmUsage.tokens_used}
                             </p>
-                            {/* <p className="mt-4 text-sm font-normal text-gray-500">
-            +3 more than last month
-          </p> */}
                         </div>
-
-                        {/* Total Users */}
                         <div className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4">
                             <h3 className="text-lg font-semibold text-gray-800">Total Cost</h3>
                             <p className="mt-2 text-3xl font-bold text-gray-900">${llmUsage.usd_used.toFixed(2)}</p>
-
                         </div>
-
-                        {/* Estimated Monthly Cost */}
                         <div className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4">
-                            <h3 className="text-lg font-semibold text-gray-800">
-                                LLM Requests
-                            </h3>
+                            <h3 className="text-lg font-semibold text-gray-800">LLM Requests</h3>
                             <p className="mt-2 text-3xl font-bold text-gray-900">{llmUsage.requests}</p>
-                            {/* <p className="text-sm text-gray-500">15% under budget</p> */}
                         </div>
                     </div>
-                }
+                )}
 
                 {/* Findings List */}
                 <div>
@@ -337,10 +296,9 @@ const Dashboard = () => {
                                         )}
                                     </button>
                                     <span className="font-bold">{location}</span>
-                              
                                 </div>
                                 <div className="flex items-center space-x-4">
-                                <div className="flex space-x-2">
+                                    <div className="flex space-x-2">
                                         {getSeverityChip(
                                             'B',
                                             findings.filter((f) => f.severity === 'blocker').length,
@@ -362,16 +320,14 @@ const Dashboard = () => {
                                             'border-2 border-green-500 text-black'
                                         )}
                                     </div>
-
-
                                     <button className="text-blue-500 text-sm">View Report</button>
-                                    <TbNetwork className="text-primary0" size={30} onClick={handleNetworkView} />
+                                    {/* <TbNetwork className="text-primary0" size={30} onClick={handleNetworkView} /> */}
                                 </div>
                             </div>
                             {expandedFiles.includes(location) && (
                                 <div className="ml-8 mt-4">
                                     {findings.map((finding, index) => (
-                                        <div key={index} className={`flex items-center       ${index > 0 ? "border-t border-gray-300" : ""}  justify-between py-2`}>
+                                        <div key={index} className={`flex items-center ${index > 0 ? "border-t border-gray-300" : ""} justify-between py-2`}>
                                             <div className="flex items-center space-x-4">
                                                 <span className="text-sm">{finding.owasp_id}</span>
                                                 <span

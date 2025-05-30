@@ -26,18 +26,22 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
   const headerButtonConfig: Record<
     string,
     {
-      label: string
+      label?: string
       onClick?: () => void
       component?: React.ReactNode
       title: string
     }
   > = {
     '/': {
-      label: 'Add New Repo',
+      // label: 'Add New Repo',
       title: 'Reports',
-      onClick: async () => navigate('/'),
+      // onClick: async () => navigate('/filesystem'),
     },
-
+'/inventory': {
+      // label: 'Add New Repo',
+      title: 'Inventory',
+      // onClick: async () => navigate('/filesystem'),
+    },
 
   }
   console.log(user, 'user details')

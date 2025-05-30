@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field, field_validator
 # ─────────────────────────── logging ────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name%s: %(message)s",
 )
 log = logging.getLogger(__name__)
 
@@ -230,28 +230,54 @@ def health():
 
 
 # ─────────── file system ──────
+# @app.get("/api/fsroot")
+# def list_dir(path: str | None = None):
+#     """
+#     List files in a directory, relative to the workspace root.
+#     If no path is given, lists the workspace root.
+#     """
+#     p = _safe(path or ROOT)
+#     if not p.is_dir():
+#         raise HTTPException(400, "not a directory")
+#     items = [
+#         {
+#             "name": f.name,
+#             "path": str(p / f.name).removeprefix(str(ROOT) + "/"),
+#             "dir": f.is_dir(),
+#         }
+#         for f in sorted(p.iterdir())
+#         if not f.name.startswith(".")  # ignore dotfiles
+#     ]
+#     return {
+#         "cwd": "" if p == ROOT else str(p.relative_to(ROOT)),
+#         "items": items,
+#     }
+
+
+# ─────────── file system ──────
 @app.get("/api/fs")
 def list_dir(path: str | None = None):
     """
-    List files in a directory, relative to the workspace root.
-    If no path is given, lists the workspace root.
+    List files in a directory, relative to the OS root.
+    If no path is given, lists the OS root.
     """
-    p = _safe(path or ROOT)
+    p = Path(path or "/").resolve()  # Use OS root as the base
     if not p.is_dir():
         raise HTTPException(400, "not a directory")
     items = [
         {
             "name": f.name,
-            "path": str(p / f.name).removeprefix(str(ROOT) + "/"),
+            "path": str(p / f.name),
             "dir": f.is_dir(),
         }
         for f in sorted(p.iterdir())
         if not f.name.startswith(".")  # ignore dotfiles
     ]
     return {
-        "cwd": "" if p == ROOT else str(p.relative_to(ROOT)),
+        "cwd": str(p),
         "items": items,
     }
+
 
 
 # ─────────── config (JSON) ─────
@@ -302,27 +328,25 @@ def runs():
 @app.post("/api/scan", response_model=RunSummary)
 async def scan(
     bg: BackgroundTasks,
-    files:     list[UploadFile] = File(default=[]),
-    path:      str | None        = Form(None),
-    depth:     int | None        = Form(None),
-    log_level: str | None        = Form(None),
+    files: list[UploadFile] = File(default=[]),
+    path: str | None = Query(None),  # Allow path to be passed as a query parameter
+    depth: int | None = Form(None),  # Depth in FormData
+    log_level: str | None = Form(None),  # Log level in FormData
 ):
     # 1) create a fresh workspace for this run
-    rid  = str(uuid.uuid4())
+    rid = str(uuid.uuid4())
     work = DATA_DIR / rid
     work.mkdir()
 
     # 2) save each UploadFile, recreating any nested folders
     for up in files:
-        dest = work / up.filename                # up.filename may be "src/App.tsx"
+        dest = work / up.filename  # up.filename may be "src/App.tsx"
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(await up.read())
 
     # 3) decide what to scan: the uploaded dir, or the provided path
     target = str(work if files else (path or _load_cfg().source_path))
-    # scan_target = str(work) if files else (path or _load_cfg().source_path)
-
-    reported_path = path or "." if files else scan_target
+    reported_path = path or "." if files else target
 
     # 4) build the CLI command & kick it off in background
     out = _report_path(rid, RunType.scan)

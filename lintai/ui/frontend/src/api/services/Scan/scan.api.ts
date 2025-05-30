@@ -1,15 +1,52 @@
-import api from '../../Api'
+import api from "../../Api"
 
+export interface scanInventoryDTO {path: string, depth?: number, logLevel?: string}
+export interface startScanDTO {path: string, depth?: number, logLevel?: string}
 class Scan {
     async getRuns() {
         const response = await api.get('/runs') // Updated endpoint
         return response.data
     }
 
-    async startScan(data:FormData
-        //  { target: string; options: Record<string, any> }
-        ) {
-        const response = await api.post('/scan', data) // Updated endpoint
+    async startScan(body: startScanDTO, files?: File[]) {
+        const formData = new FormData();
+    
+        if (files && files.length > 0) {
+            files.forEach((file) => {
+                formData.append('files', file); // files are in form data
+            });
+        }
+    
+        if (body.depth !== undefined) {
+            formData.append('depth', body.depth.toString());
+        }
+    
+        if (body.logLevel) {
+            formData.append('log_level', body.logLevel);
+        }
+    
+        const query = body?.path
+            ? `?path=${encodeURIComponent(body?.path)}`
+            : '';
+    
+        const response = await api.post(`/scan${query}`, formData);
+        return response.data;
+    }
+    
+
+    async scanInventory(body:scanInventoryDTO) {
+        const params = {
+            path:body.path,
+            depth:body.depth,
+            log_level: body.logLevel,
+        }
+        const response = await api.post('/inventory', null, { params }) // Updated endpoint
+        return response.data
+    }
+
+    async findPath(path: string) {
+        const params = { path }
+        const response = await api.get('/fs', { params }) // Updated endpoint
         return response.data
     }
 
