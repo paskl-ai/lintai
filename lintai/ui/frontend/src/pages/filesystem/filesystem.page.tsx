@@ -114,7 +114,21 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
                     }`}
                     onClick={() => handleItemClick(item)}
                   >
-                    <span>{item.dir ? '📁' : '📄'}</span>
+                    <span>
+                        {item.dir
+                        ? '📁'
+                        : item.name.endsWith('.txt')
+                        ? '📄'
+                        : item.name.endsWith('.jpg') || item.name.endsWith('.png') || item.name.endsWith('.gif')
+                        ? '🖼️'
+                        : item.name.endsWith('.pdf')
+                        ? '📑'
+                        : item.name.endsWith('.js') || item.name.endsWith('.ts') || item.name.endsWith('.py') || item.name.endsWith('.jsx') || item.name.endsWith('.tsx')
+                        ? '💻'
+                        : item.name.endsWith('.zip') || item.name.endsWith('.rar') || item.name.endsWith('.tar')
+                        ? '🗜️'
+                        : '📦'}
+                    </span>
                     <span>{item.name}</span>
                   </li>
                 ))}

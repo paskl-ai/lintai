@@ -270,20 +270,25 @@ const Inventory = () => {
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-4">
                                     <span className="font-bold">{record.sink}</span>
-                                    <span className="text-sm text-gray-500">{record.at}</span>
+                                    <span className="text-sm">
+                                        <span className="text-red-800">{record.at.split(':')[0]}</span>
+                                        <span className="text-blue-800">:</span>
+                                        <span className="text-green-600 font-bold" >{record.at.split(':')[1]}</span>
+                                    </span>
                                 </div>
                                 <div className="flex space-x-4">
                                     <button
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md shadow-md transition duration-200"
+                                        className= "border-1 border-blue-500 hover:bg-blue-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
                                         onClick={() => handleNetworkView(record)}
                                     >
-                                        View Graph
+                                       <p>View</p> 
+                                        <TbGraph/>
                                     </button>
                                     <a
-                                        href={`vscode://file/${record.sink}`}
-                                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md shadow-md transition duration-200 flex items-center"
+                                        href={`vscode://file/${record.at}`}
+                                        className= "border-1 border-green-500 hover:bg-green-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
                                     >
-                                        Edit File
+                                        Edit
                                     </a>
                                 </div>
                             </div>
@@ -300,7 +305,9 @@ const Inventory = () => {
 
                 {/* Network Visualization Modal */}
                 {isNetworkModalOpen && (
-                    <div className="fixed inset-0  bg-opacity-0 flex justify-end items-center z-50">
+                    <div 
+                 
+                    className="fixed inset-0  bg-opacity-0 flex justify-end items-center z-50   transition duration-300 ease-in-out slide-in-from-right">
                         <div className="bg-white w-2/4 h-full shadow-lg overflow-hidden flex flex-col">
                             <div className="flex justify-between items-center p-4 border-b">
                                 <h2 className="text-lg font-semibold">Data Flow Visualization</h2>
