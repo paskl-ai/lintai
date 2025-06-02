@@ -33,8 +33,16 @@ def _make_client() -> Any:
 
     # >=1.0 has OpenAI() class
     if hasattr(openai, "OpenAI"):
-        base = os.getenv("OPENAI_API_BASE")
-        key = os.getenv("OPENAI_API_KEY", "")
+        base = os.getenv(
+            "OPENAI_API_BASE"
+        ) or os.getenv(  # specific OpenAI API base URL variable
+            "LLM_ENDPOINT_URL"
+        )  # generic LLM endpoint URL variable
+        key = (
+            os.getenv("OPENAI_API_KEY")  # specific OpenAI API key variable
+            or os.getenv("LLM_API_KEY")  # generic LLM API key variable
+            or ""
+        )
         return openai.OpenAI(api_key=key or None, base_url=base or None)
 
     # 0.x – module‑level functions
@@ -49,7 +57,11 @@ class _OpenAIClient(LLMClient):
         if openai is None:
             raise ImportError(_ERROR_JSON)
         self.client = _make_client()
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.model = (
+            os.getenv("OPENAI_MODEL")  # specific OpenAI model variable
+            or os.getenv("LLM_MODEL_NAME")  # generic LLM model name variable
+            or "gpt-4.1-mini"  # default model
+        )
 
     def ask(
         self, prompt: str, max_tokens: int = 256, **kw

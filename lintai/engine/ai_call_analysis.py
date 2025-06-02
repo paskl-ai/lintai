@@ -45,6 +45,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, MutableMapping, Set
+from networkx.readwrite import json_graph
 
 from lintai.engine.python_ast_unit import PythonASTUnit
 
@@ -279,13 +280,13 @@ class _PhaseTwoVisitor(ast.NodeVisitor):
         self,
         module_name: str,
         tracker: _ImportTracker,
-        graph: MutableMapping[str, Set[str]],
+        _call_graph: MutableMapping[str, Set[str]],
         pa: "ProjectAnalyzer",
     ):
         self.mod = module_name
         self.log = logging.getLogger(__name__)
         self.tracker = tracker
-        self.graph = graph
+        self._call_graph = _call_graph
         self.pa = pa
         self.current_func: list[str] = []  # stack of qualified names
 
@@ -321,9 +322,13 @@ class _PhaseTwoVisitor(ast.NodeVisitor):
             return
         callee = self._resolve_parts(parts)
         if callee:
-            self.graph[caller].add(callee)
-            # self.log.debug("P2-EDGE  %s  →  %s  (line %s)",
-            #                caller, callee, getattr(node, "lineno", "?"))
+            self._call_graph[caller].add(callee)
+            self.log.debug(
+                "P2-EDGE  %s  →  %s  (line %s)",
+                caller,
+                callee,
+                getattr(node, "lineno", "?"),
+            )
 
         # --------- HOF / callback  some_helper(process_message_sync) ---
         def _maybe_add(expr: ast.AST) -> None:
@@ -331,10 +336,14 @@ class _PhaseTwoVisitor(ast.NodeVisitor):
                 parts = _AttrChain.parts(expr)
                 if parts:
                     tgt = self._resolve_parts(parts)
-                    if tgt:
-                        self.graph[caller].add(tgt)
-                        # self.log.debug("P2-EDGE(HOF)  %s  →  %s  (line %s)",
-                        #                 caller, tgt, getattr(expr, "lineno", "?"))
+                    if tgt and tgt != caller:
+                        self._call_graph[caller].add(tgt)
+                        self.log.debug(
+                            "P2-EDGE(HOF)  %s  →  %s  (line %s)",
+                            caller,
+                            tgt,
+                            getattr(expr, "lineno", "?"),
+                        )
 
         for arg in node.args:
             _maybe_add(arg)
@@ -378,7 +387,7 @@ class ProjectAnalyzer:
         self._units_by_node: dict[ast.AST, PythonASTUnit] = {}
         self._id_to_qname: dict[int, str] = {}
         self._qname_to_id: dict[str, int] = {}
-        self._graph = nx.DiGraph()
+        self._nx_graph = nx.DiGraph()
         self._where: dict[str, tuple[PythonASTUnit, ast.AST]] = {}
         self.ai_modules: set[str] = set()
 
@@ -436,11 +445,11 @@ class ProjectAnalyzer:
             if curr_id == target:
                 paths.append(stack.copy())
                 return
-            for nxt in self._graph.successors(curr_id):
+            for nxt in self._nx_graph.successors(curr_id):
                 _dfs(nxt, stack + [self._nodes[nxt]])
 
         # roots = graph nodes with zero in-degree
-        for root in (n for n in self._graph if self._graph.in_degree(n) == 0):
+        for root in (n for n in self._nx_graph if self._nx_graph.in_degree(n) == 0):
             _dfs(root, [self._nodes[root]])
         return paths
 
@@ -449,13 +458,13 @@ class ProjectAnalyzer:
         nid = self._qname_to_id.get(qualname)
         if nid is None:
             return []
-        return [self._id_to_qname[p] for p in self._graph.predecessors(nid)]
+        return [self._id_to_qname[p] for p in self._nx_graph.predecessors(nid)]
 
     def callees_of(self, qualname: str) -> list[str]:
         nid = self._qname_to_id.get(qualname)
         if nid is None:
             return []
-        return [self._id_to_qname[s] for s in self._graph.successors(nid)]
+        return [self._id_to_qname[s] for s in self._nx_graph.successors(nid)]
 
     def source_of(self, qualname: str):
         """
@@ -499,7 +508,7 @@ class ProjectAnalyzer:
                         plain = f"{self._modnames[unit.path]}.<lambda>@{getattr(node, 'lineno', 0)}"
 
                     self._qname_to_id.setdefault(plain, id(node))
-                    self._graph.add_node(id(node))
+                    self._nx_graph.add_node(id(node))
 
         # ── after *all* units are processed we finally connect the graph IDs ──
         for caller, callees in self._call_graph.items():
@@ -509,14 +518,14 @@ class ProjectAnalyzer:
             for callee in callees:
                 dst_id = self._qname_to_id.get(callee)
                 if dst_id is not None:
-                    self._graph.add_edge(src_id, dst_id)
+                    self._nx_graph.add_edge(src_id, dst_id)
 
         """
         # ── DEBUG dump ───────────────────────────────────────────────
         self.log.debug("P2-SUMMARY  nodes=%d  string-edges=%d  nx-edges=%d",
                        len(self._nodes),
                        sum(len(v) for v in self._call_graph.values()),
-                       self._graph.number_of_edges())
+                       self._nx_graph.number_of_edges())
 
         # which qualnames never got an id?
         dangling = [c for c in self._call_graph if c not in self._qname_to_id]
@@ -526,7 +535,7 @@ class ProjectAnalyzer:
         """
         self.log.debug(
             "Phase-2: constructed call graph with %d edges",
-            self._graph.number_of_edges(),
+            self._nx_graph.number_of_edges(),
         )
 
     # ------------------------------------------------------------------
@@ -582,8 +591,43 @@ class ProjectAnalyzer:
             "Propagated AI tags to %d functions (depth %d)", len(self._ai_funcs), depth
         )
 
+    # --------------------------------------------------------------
+    def _graph_for_sink(self, sink: AICall, depth: int) -> dict[str, list[dict]]:
+        """
+        Return {nodes, edges} for <sink> and all callers up to <depth>.
+        """
+        G = nx.DiGraph()
+
+        # ①  BFS upward through call_graph, limited by depth
+        frontier, seen, lvl = {sink.fq_name}, {sink.fq_name}, 0
+        while frontier and lvl < depth:
+            parents = {
+                caller
+                for caller, callees in self.call_graph.items()
+                if callees & frontier
+            }
+            G.add_edges_from(
+                (p, c) for p in parents for c in frontier if p != c  # ← skip self-loops
+            )
+            frontier = parents - seen
+            seen |= parents
+            lvl += 1
+
+        # ②  ensure the sink itself is in the graph even if it has no callers
+        G.add_node(sink.fq_name)
+
+        # ③  decorate nodes with metadata for the UI
+        for nid in G.nodes:
+            if nid == sink.fq_name:
+                G.nodes[nid]["label"] = "sink"
+            else:
+                G.nodes[nid]["label"] = "caller"
+
+        return json_graph.cytoscape_data(G)["elements"]
+
     # ------------------------------------------------------------------
-    # Exposed properties ------------------------------------------------
+    # Exposed properties
+    # ------------------------------------------------------------------
     @property
     def ai_calls(self) -> list[AICall]:
         return self._ai_sinks
@@ -596,9 +640,20 @@ class ProjectAnalyzer:
     def call_graph(self) -> Mapping[str, Set[str]]:
         return self._call_graph
 
+    # ------------------------------------------------------------------
+    # Public API for detectors and CLI/UI
+    # ------------------------------------------------------------------
+    def graph_for_sink(
+        self, sink: AICall, depth: int | None = None
+    ) -> dict[str, list[dict]]:
+        """
+        Convenience wrapper used by the CLI/UI.
+        """
+        return self._graph_for_sink(sink, depth or self.call_depth)
+
 
 # ---------------------------------------------------------------------------
-# 6.  External API – singleton instance for CLI/UI use ########################
+# 6.  External API – singleton instance for CLI/UI use #####################
 # ---------------------------------------------------------------------------
 
 

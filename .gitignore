@@ -35,6 +35,11 @@ htmlcov/
 .cache/
 pytest_cache/
 
+#UI build artifacts and dependencies
+lintai/ui/frontend/dist/
+lintai/ui/frontend/node_modules/
+
+
 # Docs
 doc/build/
 *.log

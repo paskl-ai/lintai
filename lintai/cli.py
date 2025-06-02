@@ -1,7 +1,9 @@
 # lintai/cli.py
 from __future__ import annotations
 
+import ast
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import List
 
@@ -12,6 +14,11 @@ from lintai.cli_support import init_common
 from lintai.detectors import run_all
 from lintai.core import report
 import lintai.engine as _engine
+import uvicorn
+
+from lintai.engine.inventory_builder import build_inventory
+from lintai.engine.inventory_builder import classify_sink, detect_frameworks
+
 
 app = typer.Typer(
     help="Lintai – shift-left GenAI security scanner",
@@ -133,6 +140,12 @@ def ai_inventory_cmd(
     output: Path = Option(
         None, "--output", "-o", help="Write JSON output to file (default: stdout)"
     ),
+    graph: bool = Option(
+        False, "--graph", "-g", help="Include full call-graph payload"
+    ),
+    group_by: str = Option(
+        None, "--group-by", help="Group AI inventory by attribute (e.g. 'file')"
+    ),
 ):
     _bootstrap(
         ctx,
@@ -148,7 +161,9 @@ def ai_inventory_cmd(
         ctx.fail("AI engine not initialised – internal error")
 
     depth = ana.call_depth
-    inventory: List[dict] = []
+    inventory = [] if not graph else None
+    graph_records = [] if graph else None
+    components_by_file = defaultdict(list)
 
     for sink in ana.ai_calls:
         record = {
@@ -157,27 +172,103 @@ def ai_inventory_cmd(
             "callers": [],
         }
 
-        # walk *upwards* through the call-graph (breadth-first)
-        frontier = {
-            fn for fn, callees in ana.call_graph.items() if sink.fq_name in callees
-        }
-        seen = set()
-        lvl = 0
-        while frontier and lvl < depth:
-            record["callers"].extend(sorted(frontier))
-            seen.update(frontier)
+        if not graph:
             frontier = {
-                parent
-                for parent, callees in ana.call_graph.items()
-                if callees & frontier and parent not in seen
+                fn for fn, callees in ana.call_graph.items() if sink.fq_name in callees
             }
-            lvl += 1
+            seen = set()
+            lvl = 0
+            while frontier and lvl < depth:
+                record["callers"].extend(sorted(frontier))
+                seen.update(frontier)
+                frontier = {
+                    parent
+                    for parent, callees in ana.call_graph.items()
+                    if callees & frontier and parent not in seen
+                }
+                lvl += 1
+            inventory.append(record)
 
-        inventory.append(record)
+            file_path = str(sink.file)
+            components_by_file[file_path].append(
+                {
+                    "type": classify_sink(sink.fq_name),
+                    "sink": sink.fq_name,
+                    "at": f"{sink.file}:{sink.lineno}",
+                }
+            )
 
-    report.write_inventory_report(inventory, output)
+        else:
+            elements = ana.graph_for_sink(sink, depth)
+            graph_records.append(
+                {"sink": sink.fq_name, "at": record["at"], "elements": elements}
+            )
+
+    component_reports = []
+    for file_path, components in components_by_file.items():
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+            frameworks = detect_frameworks(tree)
+        except Exception as e:
+            print(f"❌ Error parsing AST for {file_path}: {e}")
+            frameworks = []
+
+        component_reports.append(
+            {
+                "file": file_path,
+                "frameworks": frameworks,
+                "components": components,
+            }
+        )
+
+    if graph:
+        report.write_graph_inventory_report(graph_records, output)
+    else:
+        if group_by == "file":
+            grouped = defaultdict(
+                lambda: {"ai_calls": [], "components": [], "frameworks": []}
+            )
+            for item in inventory:
+                file = item["at"].split(":")[0]
+                grouped[file]["ai_calls"].append(item)
+            for comp in component_reports:
+                grouped[comp["file"]]["components"].extend(comp["components"])
+                grouped[comp["file"]]["frameworks"].extend(comp["frameworks"])
+
+            output_data = [{"file": k, **v} for k, v in grouped.items()]
+        else:
+            output_data = {
+                "ai_call_inventory": inventory,
+                "component_inventory": component_reports,
+            }
+
+        if output:
+            output.write_text(json.dumps(output_data, indent=2))
+        else:
+            typer.echo(json.dumps(output_data, indent=2))
+
     if output:
         typer.echo(f"\n✅ Inventory written to {output}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ui  ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+@app.command("ui", help="Launch browser UI")
+def ui_cmd(
+    port: int = Option(8501, "--port", "-p", help="Port to listen on"),
+    reload: bool = Option(False, "--reload", help="Auto-reload on code changes"),
+):
+    """
+    Start FastAPI + React UI.
+    """
+    uvicorn.run(
+        "lintai.ui.server:app",
+        host="127.0.0.1",
+        port=port,
+        reload=reload,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
