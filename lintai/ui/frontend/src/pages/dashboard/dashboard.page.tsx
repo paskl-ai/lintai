@@ -151,8 +151,8 @@ const Dashboard = () => {
     })
 
     // Derived state from query
-    const llmUsage = scans?.llm_usage||lastscan.llm_usage;
-    const findings: Finding[] = (scans?.findings||lastscan.findings as Finding[]) ?? [];
+    const llmUsage = scans?.llm_usage||lastscan?.llm_usage;
+    const findings: Finding[] = (scans?.findings||lastscan?.findings as Finding[]) ?? [];
 
     const handleFolderSelection = (path:string) => {
         // const input = document.createElement('input')

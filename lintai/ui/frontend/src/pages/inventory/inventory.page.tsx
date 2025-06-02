@@ -153,7 +153,7 @@ const Inventory = () => {
     
              
     
-                return res.report
+                return res?.report
             },
             initialData: [],
             refetchOnMount: true,
