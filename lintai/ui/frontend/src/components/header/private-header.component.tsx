@@ -14,12 +14,13 @@ import { useNavigate } from 'react-router'
 
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { removeUser, User } from '../../redux/services/User/user.slice'
-
+import ConfigurationModal from '../modals/configuration-modal'
 
 const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
   const navigate = useNavigate()
   const [addVisible, setAddVisible] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [configModalOpen, setConfigModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
   const user = useAppSelector((state) => state.user.user)
@@ -205,6 +206,19 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
                   Inventory
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => setConfigModalOpen(true)}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${
+                    configModalOpen
+                      ? 'bg-primary text-white'
+                      : 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
+                  }`}
+                >
+                  <TbServer size={24} className="mr-2" />
+                  Configuration
+                </button>
+              </li>
         
          
 
@@ -224,6 +238,17 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
           </div>
         </div>
       </aside>
+
+      {/* Configuration Modal */}
+      {configModalOpen && (
+        <ConfigurationModal onClose={() => setConfigModalOpen(false)} title="Configuration">
+          <div>
+            <p>Configuration settings go here.</p>
+            {/* Add configuration form or content here */}
+          </div>
+        </ConfigurationModal>
+      )}
+
       {addVisible && headerButton?.component}
     </div>
   )
