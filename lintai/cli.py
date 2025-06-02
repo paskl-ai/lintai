@@ -143,6 +143,9 @@ def ai_inventory_cmd(
     graph: bool = Option(
         False, "--graph", "-g", help="Include full call-graph payload"
     ),
+    group_by: str = Option(
+        None, "--group-by", help="Group AI inventory by attribute (e.g. 'file')"
+    ),
 ):
     _bootstrap(
         ctx,
@@ -170,7 +173,6 @@ def ai_inventory_cmd(
         }
 
         if not graph:
-            # walk upward through call graph
             frontier = {
                 fn for fn, callees in ana.call_graph.items() if sink.fq_name in callees
             }
@@ -187,7 +189,6 @@ def ai_inventory_cmd(
                 lvl += 1
             inventory.append(record)
 
-            # De-duplicate component inventory per file
             file_path = str(sink.file)
             components_by_file[file_path].append({
                 "type": classify_sink(sink.fq_name),
@@ -201,7 +202,6 @@ def ai_inventory_cmd(
                 {"sink": sink.fq_name, "at": record["at"], "elements": elements}
             )
 
-    # Build deduplicated component inventory
     component_reports = []
     for file_path, components in components_by_file.items():
         try:
@@ -218,14 +218,27 @@ def ai_inventory_cmd(
             "components": components,
         })
 
-    # Output
     if graph:
         report.write_graph_inventory_report(graph_records, output)
     else:
-        output_data = {
-            "ai_call_inventory": inventory,
-            "component_inventory": component_reports,
-        }
+        if group_by == "file":
+            grouped = defaultdict(lambda: {"ai_calls": [], "components": [], "frameworks": []})
+            for item in inventory:
+                file = item["at"].split(":")[0]
+                grouped[file]["ai_calls"].append(item)
+            for comp in component_reports:
+                grouped[comp["file"]]["components"].extend(comp["components"])
+                grouped[comp["file"]]["frameworks"].extend(comp["frameworks"])
+
+            output_data = [
+                {"file": k, **v} for k, v in grouped.items()
+            ]
+        else:
+            output_data = {
+                "ai_call_inventory": inventory,
+                "component_inventory": component_reports,
+            }
+
         if output:
             output.write_text(json.dumps(output_data, indent=2))
         else:
