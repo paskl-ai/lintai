@@ -10,6 +10,7 @@ Endpoints
 *  POST       /api/inventory   – run ai-inventory in background
 *  GET        /api/runs        – history
 *  GET        /api/results/{id}[ /filter ]   – reports & helpers
+*  GET        /api/last-result – fetch the most recent run result
 """
 
 from __future__ import annotations
@@ -325,6 +326,23 @@ def secrets_set(payload: SecretPayload = Body(...)):
 @app.get("/api/runs", response_model=list[RunSummary])
 def runs():
     return _runs()
+
+
+# ─────────── /last-result ──────
+@app.get("/api/last-result")
+def last_result():
+    """
+    Fetch the most recent run result along with its report if available.
+    """
+    runs = _runs()
+    if not runs:
+        raise HTTPException(404, "No runs found")
+    latest_run = max(runs, key=lambda r: r.created)
+    report_path = _report_path(latest_run.run_id, latest_run.type)
+    report = None
+    if report_path.exists():
+        report = json.loads(report_path.read_text())
+    return {"run": latest_run, "report": report}
 
 
 # ─────────── /scan ─────────────
