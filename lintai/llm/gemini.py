@@ -21,11 +21,20 @@ class _GeminiClient(LLMClient):
     def __init__(self):
         if genai is None:
             raise ImportError(_ERROR_JSON)
-        key = os.getenv("GOOGLE_API_KEY")
+        key = os.getenv(
+            "GOOGLE_API_KEY"
+        ) or os.getenv(  # specific Google Gemini API key variable
+            "LLM_API_KEY"
+        )  # generic LLM API key variable
+
         if not key:
             raise ImportError("GOOGLE_API_KEY env var missing")
         genai.configure(api_key=key)
-        self.model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-pro"))
+        self.model = genai.GenerativeModel(
+            os.getenv("GEMINI_MODEL")  # specific Gemini model variable
+            or os.getenv("LLM_MODEL_NAME")  # generic LLM model name variable
+            or "gemini-pro"  # default model
+        )
 
     def ask(
         self, prompt: str, max_tokens: int = 256, **kw

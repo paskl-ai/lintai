@@ -21,9 +21,23 @@ class _AzureClient(LLMClient):
         if openai is None or not hasattr(openai, "AzureOpenAI"):
             raise ImportError(_ERROR_JSON)
 
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_API_BASE")
-        key = os.getenv("AZURE_OPENAI_API_KEY")
-        version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        endpoint = (
+            os.getenv(
+                "AZURE_OPENAI_ENDPOINT"
+            )  # specific Azure OpenAI endpoint variable
+            or os.getenv("LLM_ENDPOINT_URL")  # generic LLM endpoint URL variable
+            or os.getenv("OPENAI_API_BASE")  # specific OpenAI API base URL variable
+        )
+        key = os.getenv(
+            "AZURE_OPENAI_API_KEY"
+        ) or os.getenv(  # specific Azure OpenAI API key variable
+            "LLM_API_KEY"
+        )  # generic LLM API key variable
+        version = (
+            os.getenv("AZURE_OPENAI_API_VERSION")
+            or os.getenv("LLM_API_VERSION")
+            or "2025-01-01-preview"
+        )
 
         if not (endpoint and key):
             raise ImportError(
@@ -37,7 +51,11 @@ class _AzureClient(LLMClient):
             azure_endpoint=endpoint,
         )
         # deployment name, not model family
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.model = (
+            os.getenv("OPENAI_MODEL")  # specific OpenAI model variable
+            or os.getenv("LLM_MODEL_NAME")  # generic LLM model name variable
+            or "gpt-4.1-mini"  # default model
+        )
 
     def ask(self, prompt: str, max_tokens: int = 256, **kw) -> str:
         try:

@@ -21,11 +21,20 @@ class _CohereClient(LLMClient):
     def __init__(self):
         if cohere is None:
             raise ImportError(_ERROR_JSON)
-        key = os.getenv("COHERE_API_KEY")
+        key = os.getenv(
+            "COHERE_API_KEY"
+        ) or os.getenv(  # specific Cohere API key variable
+            "LLM_API_KEY"
+        )  # generic LLM API key variable
+
         if not key:
             raise ImportError("COHERE_API_KEY env var missing")
         self.client = cohere.Client(key)
-        self.model = os.getenv("COHERE_MODEL", "command-r")
+        self.model = (
+            os.getenv("COHERE_MODEL")  # specific Cohere model variable
+            or os.getenv("LLM_MODEL_NAME")  # generic LLM model name variable
+            or "command-r"  # default model
+        )
 
     def ask(
         self, prompt: str, max_tokens: int = 256, **kw

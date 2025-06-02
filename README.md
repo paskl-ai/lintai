@@ -1,10 +1,10 @@
-# Lintai 🛡️🤖
+# Lintai
 
-**Lintai** is an experimental **AI-aware static-analysis tool** that spots _LLM-specific_ security bugs (prompt-injection, insecure output, data leakage …) long before they ship.
+**Lintai** is an experimental **AI-aware static-analysis tool** that spots _LLM-specific_ security bugs (prompt-injection, insecure output handling, data-leakage …) **before** code ships.
 
-| Why Lintai?                                                                              | What it does                                                                                                                        |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Traditional SAST can’t “see” how you build prompts, stream completions or store vectors. | Lintai walks your AST, tags every AI sink (OpenAI, Anthropic, LangChain, …), follows wrapper functions & asks an LLM to judge risk. |
+| Why Lintai?                                                                              | What it does                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Traditional SAST can’t “see” how you build prompts, stream completions or store vectors. | Lintai walks your AST, tags every AI sink (OpenAI, Anthropic, LangChain, …), follows wrapper chains, then asks an LLM to judge risk. |
 
 > **Requires Python ≥ 3.10**
 
@@ -13,15 +13,14 @@
 ## ✨ Key features
 
 - **Two analysis commands**
-  - `lintai scan <path>` – run all detectors, emit JSON (incl. _llm_usage_ summary)
-  - `lintai ai-inventory <path>` – list every AI call + wrapper chain
-- **Browser UI** `lintai ui` – FastAPI backend, plug-in React/Cytoscape frontend
-- **LLM-usage budget** – hard caps on requests / tokens / cost with live report
-  `LINTAI_MAX_LLM_TOKENS  LINTAI_MAX_LLM_COST_USD  LINTAI_MAX_LLM_REQUESTS`
+  - `lintai ai-inventory <src-code-path>` – list every AI call and its caller chain
+  - `lintai scan <src-code-path>` – run all detectors, emit JSON (with _llm_usage_ summary)
+- **Browser UI** `lintai ui` – FastAPI backend + React / Cytoscape front-end (includes a **Settings** tab that edits your `.env`)
+- **LLM-usage budget** – hard caps on requests / tokens / cost — `LINTAI_MAX_LLM_TOKENS`, `LINTAI_MAX_LLM_COST_USD`, `LINTAI_MAX_LLM_REQUESTS`
 - Modular detector registry (`entry_points`)
 - OWASP LLM Top-10 & MITRE ATT&CK baked in
 - DSL for custom rules
-- CI-friendly JSON / (soon) SARIF output
+- CI-friendly JSON output (SARIF coming soon)
 
 ---
 
@@ -33,43 +32,60 @@
 
 
 ```bash
-# end users
+# end-users
 pip install lintai
 
-# full dev experience (tests, UI)
+# full dev experience (tests + UI)
 pip install -e ".[dev,ui]"
 ```
 
-Enable LLM-backed checks:
+Add the provider you need:
 
 ```bash
-pip install "lintai[openai]"      # or  [anthropic]  [gemini]  [cohere]
+pip install "lintai[openai]"        # or  [anthropic]  [gemini]  [cohere]
 ```
 
-### 2 · Configure
+### 2 · Configure LLM detectors (optional)
 
 ```bash
-# .env  (see env.sample)
-OPENAI_API_KEY=sk-...
-LINTAI_MAX_LLM_TOKENS=50_000
+# .env  — minimum
+LINTAI_LLM_PROVIDER=openai              # azure / anthropic / gemini / cohere / dummy
+LLM_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx # single key var for any provider
+
+# optional provider parameters
+LLM_MODEL_NAME=gpt-4.1-mini
+LLM_ENDPOINT_URL=https://api.openai.com/v1/
+LLM_API_VERSION=2025-01-01-preview      # Azure default
+
+# hard budget caps
+LINTAI_MAX_LLM_TOKENS=50000
 LINTAI_MAX_LLM_COST_USD=10
+LINTAI_MAX_LLM_REQUESTS=500
 ```
 
-`lintai` auto-loads `.env` (no override of real env-vars).
+Lintai auto-loads `.env`; the UI writes the same file, so CLI & browser stay in sync.
 
 ### 3 · Run
 
 ```bash
-lintai scan src/
 lintai ai-inventory src/ --ai-call-depth 4
+lintai scan src/
 ```
 
 ### 4 · Launch UI (optional)
 
 ```bash
-lintai ui                  # http://localhost:8501/api/docs  (REST)
+lintai ui                     # REST docs at http://localhost:8501/api/docs
 yarn -C lintai/ui/frontend start   # React dev-server on :5173
 ```
+
+---
+
+## 🔬 How LLM detectors work
+
+LLM-powered rules collect the **full source** of functions that call AI frameworks, plus their caller chain, and ask an external LLM to classify OWASP risks.
+
+Budget checks run _before_ the call; actual usage is recorded afterwards.
 
 ---
 
@@ -107,53 +123,42 @@ yarn -C lintai/ui/frontend start   # React dev-server on :5173
 
 ---
 
-## 🔬 How LLM detectors work
-
-Some rules send the **full function source** to an LLM and expect one-line JSON back:
-
-```bash
-export LINTAI_LLM_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=sk-...
-```
-
-Budgets are enforced _before_ the call and itemised afterwards.
-
----
-
 ## 📦 Directory layout
 
 lintai/
-├─ cli.py ← Typer entry-point
-├─ ui/ ← FastAPI backend + React frontend stub
-├─ engine/ ← AST walker & AI-call analysis
-├─ detectors/ ← Static & LLM-powered rules
-├─ dsl/ ← Custom rule loader
-└─ core/ ← Finding model, token-budget manager …
+├── cli.py Typer entry-point
+├── ui/ FastAPI backend + React frontend stub
+├── engine/ AST walker & AI-call analysis
+├── detectors/ Static & LLM-backed rules
+├── dsl/ Custom rule loader
+└── core/ Finding model, token-budget manager …
 
 ---
 
 ## 🌐 REST API cheat-sheet
 
-| Method & path                | Body / Params      | Purpose                             |
-| ---------------------------- | ------------------ | ----------------------------------- |
-| `GET  /api/health`           | –                  | Liveness probe                      |
-| `GET  /api/config`           | –                  | Read current config                 |
-| `POST /api/config`           | `ConfigModel` JSON | Update settings (path, depth …)     |
-| `POST /api/scan`             | multipart files    | Run detectors on uploaded code      |
-| `POST /api/inventory`        | `path=<dir>`       | Inventory run on server-side folder |
-| `GET  /api/runs`             | –                  | List all runs + status              |
-| `GET  /api/results/{run_id}` | –                  | Fetch scan / inventory report       |
+| Method & path            | Body / Params        | Purpose                             |
+| ------------------------ | -------------------- | ----------------------------------- |
+| `GET  /api/health`       | –                    | Liveness probe                      |
+| `GET  /api/config`       | –                    | Read current config                 |
+| `POST /api/config`       | `ConfigModel` JSON   | Update settings (path, depth …)     |
+| `GET /POST /api/env`     | `EnvPayload` JSON    | Read / update non-secret .env       |
+| `POST /api/secrets`      | `SecretPayload` JSON | Store API key (write-only)          |
+| `POST /api/scan`         | multipart files      | Run detectors on uploaded code      |
+| `POST /api/inventory`    | `path=<dir>`         | Inventory run on server-side folder |
+| `GET  /api/runs`         | –                    | List all runs + status              |
+| `GET  /api/results/{id}` | –                    | Fetch scan / inventory report       |
 
-OpenAPI docs auto-generated at **`/api/docs`**.
+Auto-generated OpenAPI docs live at **`/api/docs`**.
 
 ---
 
 ## 📺 Roadmap
 
-- SARIF & GitHub-Actions template
-- VS Code extension (uses above REST)
+- SARIF + GitHub Actions template
+- VS Code extension (uses the REST API)
 - Live taint-tracking
-- JavaScript/TypeScript support
+- JavaScript / TypeScript support
 
 ---
 
