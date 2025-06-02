@@ -81,6 +81,7 @@ class RunSummary(BaseModel):
 class SecretPayload(BaseModel):
     """Write-only keys.  None entries are ignored."""
 
+    LLM_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     AZURE_OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
@@ -95,7 +96,9 @@ class EnvPayload(BaseModel):
     LINTAI_MAX_LLM_COST_USD: float | None = None
     LINTAI_MAX_LLM_REQUESTS: int | None = None
     LINTAI_LLM_PROVIDER: str | None = None
-    OPENAI_MODEL: str | None = None
+    LLM_ENDPOINT_URL: str | None = None
+    LLM_API_VERSION: str | None = None
+    LLM_MODEL_NAME: str | None = None
     # ⇢ add more knobs as needed
 
     @field_validator("*", mode="before")
