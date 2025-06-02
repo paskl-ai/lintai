@@ -7,6 +7,7 @@ import os
 USER_SSN = os.getenv("USER_SSN", "123-45-6789")
 USER_EMAIL = os.getenv("USER_EMAIL", "alice@example.com")
 
+
 def process_user_data(user_input: str):
     """
     ❌ Insecurely embeds PII directly into an LLM prompt.
@@ -23,6 +24,7 @@ def process_user_data(user_input: str):
         messages=[{"role": "system", "content": prompt}],
     )
     return response
+
 
 if __name__ == "__main__":
     user_task = input("Enter your data task: ")

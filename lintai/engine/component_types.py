@@ -11,9 +11,9 @@ SINK_TYPE_MAP = {
     **DSPY_COMPONENTS,
 }
 
+
 def classify_sink(sink: str) -> str:
     for key in SINK_TYPE_MAP:
         if key in sink:
             return SINK_TYPE_MAP[key]
     return "Unknown"
-

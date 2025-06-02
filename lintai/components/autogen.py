@@ -1,5 +1,1 @@
-AUTOGEN_COMPONENTS = {
-    "Agent": "Agent",
-    "GroupChat": "MultiAgent"
-}
-
+AUTOGEN_COMPONENTS = {"Agent": "Agent", "GroupChat": "MultiAgent"}

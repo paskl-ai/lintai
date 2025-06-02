@@ -2,6 +2,7 @@ from .frameworks import detect_frameworks
 from .component_types import classify_sink
 import ast
 
+
 def build_inventory(file_path, ai_sinks):
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -17,15 +18,6 @@ def build_inventory(file_path, ai_sinks):
         at = sink_entry.get("at")
         comp_type = classify_sink(sink)
 
-        components.append({
-            "type": comp_type,
-            "sink": sink,
-            "at": at
-        })
+        components.append({"type": comp_type, "sink": sink, "at": at})
 
-    return {
-        "file": file_path,
-        "frameworks": frameworks,
-        "components": components
-    }
-
+    return {"file": file_path, "frameworks": frameworks, "components": components}

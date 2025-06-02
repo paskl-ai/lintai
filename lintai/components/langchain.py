@@ -11,6 +11,5 @@ LANGCHAIN_COMPONENTS = {
     "tmpl": "Prompt",
     "tmpl | llm": "Chain",
     "FAISS": "VectorDB",
-    "RetrievalQA": "Chain"
+    "RetrievalQA": "Chain",
 }
-

@@ -190,11 +190,13 @@ def ai_inventory_cmd(
             inventory.append(record)
 
             file_path = str(sink.file)
-            components_by_file[file_path].append({
-                "type": classify_sink(sink.fq_name),
-                "sink": sink.fq_name,
-                "at": f"{sink.file}:{sink.lineno}"
-            })
+            components_by_file[file_path].append(
+                {
+                    "type": classify_sink(sink.fq_name),
+                    "sink": sink.fq_name,
+                    "at": f"{sink.file}:{sink.lineno}",
+                }
+            )
 
         else:
             elements = ana.graph_for_sink(sink, depth)
@@ -212,17 +214,21 @@ def ai_inventory_cmd(
             print(f"❌ Error parsing AST for {file_path}: {e}")
             frameworks = []
 
-        component_reports.append({
-            "file": file_path,
-            "frameworks": frameworks,
-            "components": components,
-        })
+        component_reports.append(
+            {
+                "file": file_path,
+                "frameworks": frameworks,
+                "components": components,
+            }
+        )
 
     if graph:
         report.write_graph_inventory_report(graph_records, output)
     else:
         if group_by == "file":
-            grouped = defaultdict(lambda: {"ai_calls": [], "components": [], "frameworks": []})
+            grouped = defaultdict(
+                lambda: {"ai_calls": [], "components": [], "frameworks": []}
+            )
             for item in inventory:
                 file = item["at"].split(":")[0]
                 grouped[file]["ai_calls"].append(item)
@@ -230,9 +236,7 @@ def ai_inventory_cmd(
                 grouped[comp["file"]]["components"].extend(comp["components"])
                 grouped[comp["file"]]["frameworks"].extend(comp["frameworks"])
 
-            output_data = [
-                {"file": k, **v} for k, v in grouped.items()
-            ]
+            output_data = [{"file": k, **v} for k, v in grouped.items()]
         else:
             output_data = {
                 "ai_call_inventory": inventory,

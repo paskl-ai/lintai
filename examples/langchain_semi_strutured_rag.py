@@ -2,56 +2,58 @@
 # coding: utf-8
 
 # ## Semi-structured RAG
-# 
-# Many documents contain a mixture of content types, including text and tables. 
-# 
-# Semi-structured data can be challenging for conventional RAG for at least two reasons: 
-# 
+#
+# Many documents contain a mixture of content types, including text and tables.
+#
+# Semi-structured data can be challenging for conventional RAG for at least two reasons:
+#
 # * Text splitting may break up tables, corrupting the data in retrieval
-# * Embedding tables may pose challenges for semantic similarity search 
-# 
-# This cookbook shows how to perform RAG on documents with semi-structured data: 
-# 
+# * Embedding tables may pose challenges for semantic similarity search
+#
+# This cookbook shows how to perform RAG on documents with semi-structured data:
+#
 # * We will use [Unstructured](https://unstructured.io/) to parse both text and tables from documents (PDFs).
 # * We will use the [multi-vector retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector) to store raw tables, text along with table summaries better suited for retrieval.
 # * We will use [LCEL](https://python.langchain.com/docs/expression_language/) to implement the chains used.
-# 
+#
 # The overall flow is here:
-# 
+#
 # ![MVR.png](attachment:7b5c5a30-393c-4b27-8fa1-688306ef2aef.png)
-# 
+#
 # ## Packages
 
 # In[ ]:
 
 
-get_ipython().system(' pip install langchain langchain-chroma "unstructured[all-docs]" pydantic lxml langchainhub')
+get_ipython().system(
+    ' pip install langchain langchain-chroma "unstructured[all-docs]" pydantic lxml langchainhub'
+)
 
 
-# The PDF partitioning used by Unstructured will use: 
-# 
+# The PDF partitioning used by Unstructured will use:
+#
 # * `tesseract` for Optical Character Recognition (OCR)
 # *  `poppler` for PDF rendering and processing
 
 # In[ ]:
 
 
-get_ipython().system(' brew install tesseract')
-get_ipython().system(' brew install poppler')
+get_ipython().system(" brew install tesseract")
+get_ipython().system(" brew install poppler")
 
 
 # ## Data Loading
-# 
+#
 # ### Partition PDF tables and text
-# 
-# Apply to the [`LLaMA2`](https://arxiv.org/pdf/2307.09288.pdf) paper. 
-# 
-# We use the Unstructured [`partition_pdf`](https://unstructured-io.github.io/unstructured/core/partition.html#partition-pdf), which segments a PDF document by using a layout model. 
-# 
-# This layout model makes it possible to extract elements, such as tables, from pdfs. 
-# 
+#
+# Apply to the [`LLaMA2`](https://arxiv.org/pdf/2307.09288.pdf) paper.
+#
+# We use the Unstructured [`partition_pdf`](https://unstructured-io.github.io/unstructured/core/partition.html#partition-pdf), which segments a PDF document by using a layout model.
+#
+# This layout model makes it possible to extract elements, such as tables, from pdfs.
+#
 # We also can use `Unstructured` chunking, which:
-# 
+#
 # * Tries to identify document sections (e.g., Introduction, etc)
 # * Then, builds text blocks that maintain sections while also honoring user-defined chunk sizes
 
@@ -90,7 +92,7 @@ raw_pdf_elements = partition_pdf(
 
 
 # We can examine the elements extracted by `partition_pdf`.
-# 
+#
 # `CompositeElement` are aggregated chunks.
 
 # In[13]:
@@ -137,15 +139,15 @@ print(len(text_elements))
 
 
 # ## Multi-vector retriever
-# 
-# Use [multi-vector-retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector#summary) to produce summaries of tables and, optionally, text. 
-# 
+#
+# Use [multi-vector-retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector#summary) to produce summaries of tables and, optionally, text.
+#
 # With the summary, we will also store the raw table elements.
-# 
+#
 # The summaries are used to improve the quality of retrieval, [as explained in the multi vector retriever docs](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector).
-# 
-# The raw tables are passed to the LLM, providing the full table context for the LLM to generate the answer.  
-# 
+#
+# The raw tables are passed to the LLM, providing the full table context for the LLM to generate the answer.
+#
 # ### Summaries
 
 # In[16]:
@@ -157,9 +159,9 @@ from langchain_openai import ChatOpenAI
 
 
 # We create a simple summarize chain for each element.
-# 
+#
 # You can also see, re-use, or modify the prompt in the Hub [here](https://smith.langchain.com/hub/rlm/multi-vector-retriever-summarization).
-# 
+#
 # ```
 # from langchain import hub
 # obj = hub.pull("rlm/multi-vector-retriever-summarization")
@@ -169,7 +171,7 @@ from langchain_openai import ChatOpenAI
 
 
 # Prompt
-prompt_text = """You are an assistant tasked with summarizing tables and text. 
+prompt_text = """You are an assistant tasked with summarizing tables and text.
 Give a concise summary of the table or text. Table or text chunk: {element} """
 prompt = ChatPromptTemplate.from_template(prompt_text)
 
@@ -195,9 +197,9 @@ text_summaries = summarize_chain.batch(texts, {"max_concurrency": 5})
 
 
 # ### Add to vectorstore
-# 
-# Use [Multi Vector Retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector#summary) with summaries: 
-# 
+#
+# Use [Multi Vector Retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector#summary) with summaries:
+#
 # * `InMemoryStore` stores the raw text, tables
 # * `vectorstore` stores the embedded summaries
 
@@ -246,7 +248,7 @@ retriever.docstore.mset(list(zip(table_ids, tables)))
 
 
 # ## RAG
-# 
+#
 # Run [RAG pipeline](https://python.langchain.com/docs/expression_language/cookbook/retrieval).
 
 # In[28]:
@@ -280,9 +282,9 @@ chain.invoke("What is the number of training tokens for LLaMA2?")
 
 
 # We can check the [trace](https://smith.langchain.com/public/4739ae7c-1a13-406d-bc4e-3462670ebc01/r) to see what chunks were retrieved:
-# 
+#
 # This includes Table 1 of the paper, showing the Tokens used for training.
-# 
+#
 # ```
 # Training Data Params Context GQA Tokens LR Length 7B 2k 1.0T 3.0x 10-4 See Touvron et al. 13B 2k 1.0T 3.0 x 10-4 LiaMa 1 (2023) 33B 2k 14T 1.5 x 10-4 65B 2k 1.4T 1.5 x 10-4 7B 4k 2.0T 3.0x 10-4 Liama 2 A new mix of publicly 13B 4k 2.0T 3.0 x 10-4 available online data 34B 4k v 2.0T 1.5 x 10-4 70B 4k v 2.0T 1.5 x 10-4
 # ```

@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 # Regex patterns for basic PII detection
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
-SSN_REGEX   = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+SSN_REGEX = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+
 
 @register("PII01", scope="module")
 def detect_pii_leak(unit: SourceUnit):
@@ -28,7 +29,9 @@ def detect_pii_leak(unit: SourceUnit):
             if isinstance(part, ast.FormattedValue):
                 # get the actual variable name(s) used
                 expr = part.value
-                if isinstance(expr, ast.Name) and re.search(r"(SSN|EMAIL)", expr.id, re.IGNORECASE):
+                if isinstance(expr, ast.Name) and re.search(
+                    r"(SSN|EMAIL)", expr.id, re.IGNORECASE
+                ):
                     yield Finding(
                         detector_id="PII01",
                         owasp_id="PII01: PII Exposure",
@@ -40,5 +43,5 @@ def detect_pii_leak(unit: SourceUnit):
                         ),
                         location=unit.path,
                         line=fstr.lineno,
-                        fix="Remove or mask PII variables before embedding in prompts."
+                        fix="Remove or mask PII variables before embedding in prompts.",
                     )

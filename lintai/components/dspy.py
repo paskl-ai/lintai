@@ -1,5 +1,1 @@
-DSPY_COMPONENTS = {
-    "dspy.Module": "Chain",
-    "dspy.Predict": "Predictor"
-}
-
+DSPY_COMPONENTS = {"dspy.Module": "Chain", "dspy.Predict": "Predictor"}
