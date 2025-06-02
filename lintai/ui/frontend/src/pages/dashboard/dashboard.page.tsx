@@ -71,6 +71,12 @@ const Dashboard = () => {
         setFileSearchQuery(e.target.value)
     }
 
+    const configValues = useAppSelector((state) => state.config); // Access config slice
+
+    const handleNavigateToConfig = () => {
+        navigate('/configuration'); // Adjust route as needed
+    };
+
     // 1️⃣ Mutation to start a scan
     const { mutate: startScan, isPending: isPendingStartServer } = useMutation({
         mutationFn: async (body:startScanDTO ) => {
@@ -123,9 +129,30 @@ const Dashboard = () => {
         enabled: !!runId,
     })
 
+    const {
+        data: lastscan,
+        isFetching: isFetchingLastScan,
+    } = useQuery({
+        queryKey: [QueryKey.JOB+'last'],
+        queryFn: async () => {
+            const res = await ScanService.getLastResults()
+
+            if (res?.data||res?.findings) {
+                dispatch(resetJob())
+            }
+
+            return res.report
+        },
+        initialData: [],
+        refetchOnMount: true,
+        refetchOnWindowFocus: false,
+        refetchInterval: isProcessing ? 3000 : false,
+        enabled: !!(!scans?.findings)
+    })
+
     // Derived state from query
-    const llmUsage = scans?.llm_usage;
-    const findings: Finding[] = (scans?.findings as Finding[]) ?? [];
+    const llmUsage = scans?.llm_usage||lastscan.llm_usage;
+    const findings: Finding[] = (scans?.findings||lastscan.findings as Finding[]) ?? [];
 
     const handleFolderSelection = (path:string) => {
         // const input = document.createElement('input')
@@ -156,7 +183,7 @@ const Dashboard = () => {
         // }
 
         // input.click()
-        console.log(path, 'selected path')
+        // console.log(path, 'selected path')
 const body={
     path: path
 }
@@ -193,7 +220,7 @@ const body={
    
 
     return (
-        <div className="flex sm:ml-40">
+        <div className="flex sm:ml-50">
             {/* Sidebar filters */}
             {/* <aside className="w-50 bg-white p-6 border-r h-screen">
                 <h2 className="text-xl font-semibold mb-6 text-gray-800">Filters</h2>
@@ -245,7 +272,7 @@ const body={
                      loading={isProcessing}
                      >
                             <FiFolder className="mr-2" />
-                            Open File
+                            Run scan
                         </CommonButton>
                     </div>
                 </div>
@@ -281,6 +308,17 @@ const body={
                         </div>
                     </div>
                 )}
+
+                {/* Configuration Section */}
+                <div 
+                    className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4 mt-6 cursor-pointer"
+                    onClick={handleNavigateToConfig}
+                >
+                    <h3 className="text-lg font-semibold text-gray-800">Configuration</h3>
+                    <pre className="mt-2 text-sm text-gray-700">
+                        {JSON.stringify(configValues, null, 2)}
+                    </pre>
+                </div>
 
                 {/* Findings List */}
                 <div>

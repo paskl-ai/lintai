@@ -4,7 +4,7 @@ export interface scanInventoryDTO {path: string, depth?: number, logLevel?: stri
 export interface startScanDTO {path: string, depth?: number, logLevel?: string}
 class Scan {
     async getRuns() {
-        const response = await api.get('/runs') // Updated endpoint
+        const response = await api.get('/api/runs') // Updated endpoint
         return response.data
     }
 
@@ -29,7 +29,7 @@ class Scan {
             ? `?path=${encodeURIComponent(body?.path)}`
             : '';
     
-        const response = await api.post(`/scan${query}`, formData);
+        const response = await api.post(`/api/scan${query}`, formData);
         return response.data;
     }
     
@@ -40,18 +40,23 @@ class Scan {
             depth:body.depth,
             log_level: body.logLevel,
         }
-        const response = await api.post('/inventory', null, { params }) // Updated endpoint
+        const response = await api.post('/api/inventory', null, { params }) // Updated endpoint
         return response.data
     }
 
     async findPath(path: string) {
         const params = { path }
-        const response = await api.get('/fs', { params }) // Updated endpoint
+        const response = await api.get('/api/fs', { params }) // Updated endpoint
         return response.data
     }
 
     async getResults(runId: string) {
-        const response = await api.get(`/results/${runId}`) // Updated endpoint
+        const response = await api.get(`/api/results/${runId}`) // Updated endpoint
+        return response.data
+    }
+
+    async getLastResults() {
+        const response = await api.get(`/api/last-result`) // Updated endpoint
         return response.data
     }
 

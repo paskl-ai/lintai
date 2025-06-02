@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 
 interface ConfigurationModalProps {
   onClose: () => void
-  onSave: (depth: number, logLevel: string, apiKeys: string[], aiModels: string[]) => void
+  onSave: (config: Record<string, string | number | null>) => void
 }
 
 const ConfigurationModal: React.FC<ConfigurationModalProps> = ({ onClose, onSave }) => {
@@ -10,9 +10,28 @@ const ConfigurationModal: React.FC<ConfigurationModalProps> = ({ onClose, onSave
   const [logLevel, setLogLevel] = useState('info')
   const [apiKeys, setApiKeys] = useState<string[]>([''])
   const [aiModels, setAiModels] = useState<string[]>([''])
+  const [llmProvider, setLlmProvider] = useState<string | null>(null)
+  const [maxLlmCost, setMaxLlmCost] = useState<number | null>(null)
+  const [maxLlmRequests, setMaxLlmRequests] = useState<number | null>(null)
+  const [maxLlmTokens, setMaxLlmTokens] = useState<number | null>(null)
+  const [llmApiVersion, setLlmApiVersion] = useState<string | null>(null)
+  const [llmEndpointUrl, setLlmEndpointUrl] = useState<string | null>(null)
+  const [llmModelName, setLlmModelName] = useState<string | null>(null)
 
   const handleSave = () => {
-    onSave(depth, logLevel, apiKeys, aiModels)
+    onSave({
+      depth,
+      logLevel,
+    //   apiKeys,
+    //   aiModels,
+      LINTAI_LLM_PROVIDER: llmProvider,
+      LINTAI_MAX_LLM_COST_USD: maxLlmCost,
+      LINTAI_MAX_LLM_REQUESTS: maxLlmRequests,
+      LINTAI_MAX_LLM_TOKENS: maxLlmTokens,
+      LLM_API_VERSION: llmApiVersion,
+      LLM_ENDPOINT_URL: llmEndpointUrl,
+      LLM_MODEL_NAME: llmModelName,
+    })
   }
 
   return (
@@ -53,6 +72,69 @@ const ConfigurationModal: React.FC<ConfigurationModalProps> = ({ onClose, onSave
           <textarea
             value={aiModels.join('\n')}
             onChange={(e) => setAiModels(e.target.value.split('\n'))}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">LLM Provider</label>
+          <input
+            type="text"
+            value={llmProvider || ''}
+            onChange={(e) => setLlmProvider(e.target.value || null)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Max LLM Cost (USD)</label>
+          <input
+            type="number"
+            value={maxLlmCost || ''}
+            onChange={(e) => setMaxLlmCost(e.target.value ? Number(e.target.value) : null)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Max LLM Requests</label>
+          <input
+            type="number"
+            value={maxLlmRequests || ''}
+            onChange={(e) => setMaxLlmRequests(e.target.value ? Number(e.target.value) : null)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Max LLM Tokens</label>
+          <input
+            type="number"
+            value={maxLlmTokens || ''}
+            onChange={(e) => setMaxLlmTokens(e.target.value ? Number(e.target.value) : null)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">LLM API Version</label>
+          <input
+            type="text"
+            value={llmApiVersion || ''}
+            onChange={(e) => setLlmApiVersion(e.target.value || null)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">LLM Endpoint URL</label>
+          <input
+            type="text"
+            value={llmEndpointUrl || ''}
+            onChange={(e) => setLlmEndpointUrl(e.target.value || null)}
+            className="w-full border rounded px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">LLM Model Name</label>
+          <input
+            type="text"
+            value={llmModelName || ''}
+            onChange={(e) => setLlmModelName(e.target.value || null)}
             className="w-full border rounded px-2 py-1"
           />
         </div>

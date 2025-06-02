@@ -16,6 +16,7 @@ import {
 import storage from 'redux-persist/lib/storage'
 
 import AuthReducer from './Auth/auth.slice'
+import ConfigReducer from './Config/config.slice'
 import UserReducer from './User/user.slice'
 import ServerStatusReducer from './ServerStatus/server.status.slice'
 
@@ -30,6 +31,7 @@ const reducers = combineReducers({
   // error:ErrorReducer,
   serverStatus: ServerStatusReducer,
 
+  config:ConfigReducer,
   user: UserReducer,
   // general:GeneralReducer,
   // job:JobReducer,

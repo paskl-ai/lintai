@@ -78,8 +78,14 @@ const Inventory = () => {
     const logLevels = ['debug', 'info', 'warn', 'error'];
 
     const handleFileSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFileSearchQuery(e.target.value)
+        setSearchQuery(e.target.value)
     }
+
+    const configValues = useAppSelector((state) => state.config); // Access config slice
+
+    const handleNavigateToConfig = () => {
+        navigate('/configuration'); // Adjust route as needed
+    };
 
     const handleScanSelection = (record: any) => {
         handleNetworkView(record?.elements||null)
@@ -120,7 +126,7 @@ const Inventory = () => {
         data: scans,
         isFetching: isFetchingScan,
     } = useQuery({
-        queryKey: [QueryKey.JOB+'Inventory'],
+        queryKey: [QueryKey.JOB+'inventory'],
         queryFn: async () => {
             const res = await ScanService.getResults(runId!!)
 
@@ -137,10 +143,37 @@ const Inventory = () => {
         enabled: !!runId,
     })
 
+       const {
+            data: lastscan,
+            isFetching: isFetchingLastScan,
+        } = useQuery({
+            queryKey: [QueryKey.JOB+'last'],
+            queryFn: async () => {
+                const res = await ScanService.getLastResults()
+    
+             
+    
+                return res.report
+            },
+            initialData: [],
+            refetchOnMount: true,
+            refetchOnWindowFocus: false,
+            refetchInterval: isProcessing ? 3000 : false,
+            enabled: !!(!scans?.data?.records )
+        })
     // Derived state from query
     console.log(scans, 'inventory scans data')
-    const llmUsage = scans?.llm_usage;
-    const inventoryRecords = scans?.data?.records || [];
+    const llmUsage = scans?.llm_usage||lastscan?.llm_usage;
+    const inventoryRecords = scans?.data?.records || lastscan?.data?.records|| [];
+
+    // Filter inventory records based on the search query
+    const filteredInventoryRecords = inventoryRecords.filter((record: any) => {
+        const searchLower = searchQuery.toLowerCase()
+        return (
+            record.sink.toLowerCase().includes(searchLower) ||
+            record.at.toLowerCase().includes(searchLower)
+        )
+    })
 
     const handleFolderSelection = (path:string) => {
         startScanInventory({
@@ -176,7 +209,7 @@ const Inventory = () => {
     console.log(networkRecord,'network record')
 
     return (
-        <div className="flex sm:ml-40">
+        <div className="p-6 flex sm:ml-50">
 
             {/* Main Content */}
             <main className="flex-1 ">
@@ -190,43 +223,18 @@ const Inventory = () => {
                                 type="text"
                                 placeholder="Search files..."
                                 className="pl-10 pr-4 py-2 border rounded w-64"
-                                value={fileSearchQuery}
+                                value={searchQuery}
                                 onChange={handleFileSearchChange}
                             />
                         </div>
-                        <div className="flex items-center space-x-4">
-                            <div className="flex flex-col items-start">
-                                <label className="text-base font-medium text-gray-700">Log Level</label>
-                                <select
-                                    value={logLevel}
-                                    onChange={(e) => setLogLevel(e.target.value)}
-                                    className="bg-primary text-white px-4 py-2 rounded flex items-center"
-                                    >
-                                    {logLevels.map((level) => (
-                                        <option key={level} value={level}>
-                                            {level.charAt(0).toUpperCase() + level.slice(1)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex flex-col items-start">
-                                <label className="text-base font-medium text-gray-700">Scan Depth</label>
-                                <input
-                                    type="number"
-                                    value={scanDepth}
-                                    onChange={(e) => setScanDepth(Number(e.target.value))}
-                                    min={1}
-                                    className="bg-primary text-white px-4 py-2 rounded flex items-center"
-                                />
-                            </div>
-                        </div>
+                    
                         <CommonButton
                             className="bg-primary text-white px-4 py-2 rounded flex items-center"
                             onClick={() => setIsFileSystemModalOpen(true)}
                             loading={isProcessing}
                         >
                             <FiFolder className="mr-2" />
-                            Open File
+                            Run Scan
                         </CommonButton>
                     </div>
                 </div>
@@ -263,9 +271,20 @@ const Inventory = () => {
                     </div>
                 )}
 
+                {/* Configuration Section */}
+                <div 
+                    className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4 mt-6 cursor-pointer"
+                    onClick={handleNavigateToConfig}
+                >
+                    <h3 className="text-lg font-semibold text-gray-800">Configuration</h3>
+                    <pre className="mt-2 text-sm text-gray-700">
+                        {JSON.stringify(configValues, null, 2)}
+                    </pre>
+                </div>
+
                 {/* Inventory Records List */}
                 <div>
-                    {inventoryRecords.map((record: any, index: number) => (
+                    {filteredInventoryRecords.map((record: any, index: number) => (
                         <div key={index} className={`border-b py-4 px-1 ${networkRecord?.at === record?.at ? 'bg-amber-200' : ''}`}>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-4">
@@ -295,11 +314,11 @@ const Inventory = () => {
                         </div>
                     ))}
                 </div>
-                {inventoryRecords.length === 0 && (
+                {filteredInventoryRecords.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-gray-500">
                         <FiFolder size={48} className="mb-4" />
-                        <p className="text-lg font-semibold">No inventory records available</p>
-                        <p className="text-sm mt-2">Add a repository to start scanning for inventory data.</p>
+                        <p className="text-lg font-semibold">No matching inventory records found</p>
+                        <p className="text-sm mt-2">Try adjusting your search query.</p>
                     </div>
                 )}
 

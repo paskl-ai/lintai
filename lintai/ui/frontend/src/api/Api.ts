@@ -18,7 +18,7 @@ interface CustomConfig extends AxiosRequestConfig {
 }
 
 const api: AxiosInstance = axios.create({
-  baseURL: baseUrl,
+  
 })
 
 // Request interceptor

@@ -4,17 +4,24 @@ import { FiMenu } from 'react-icons/fi'
 import {
   TbArrowLeft,
 
+  TbBox,
+
   TbKey,
   TbLayoutDashboard,
 
   TbServer,
+  TbSettings,
 
 } from 'react-icons/tb'
 import { useNavigate } from 'react-router'
 
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { removeUser, User } from '../../redux/services/User/user.slice'
-import ConfigurationModal from '../modals/configuration-modal'
+import { useQuery } from '@tanstack/react-query'
+import { ConfigService } from '../../api/services/Config/config.api'
+import { setConfig, setEnv } from '../../redux/services/Config/config.slice'
+import { QueryKey } from '../../api/QueryKey'
+
 
 const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
   const navigate = useNavigate()
@@ -38,14 +45,19 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
       title: 'Reports',
       // onClick: async () => navigate('/filesystem'),
     },
-'/inventory': {
+    '/inventory': {
       // label: 'Add New Repo',
       title: 'Inventory',
       // onClick: async () => navigate('/filesystem'),
     },
+    '/configuration': {
+      // label: 'Add New Repo',
+      title: 'Configuration',
+      // onClick: async () => navigate('/filesystem'),
+    },
 
   }
-  console.log(user, 'user details')
+
   // Helper function to get header button config matching the current path
   const getHeaderButtonConfig = (currentPath: string) => {
     for (const route in headerButtonConfig) {
@@ -85,6 +97,49 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
     dispatch(removeUser())
   }
 
+
+  const {
+    data: configRes,
+    isFetching: isFetchingConfig,
+} = useQuery({
+    queryKey: [QueryKey.CONFIG],
+    queryFn: async () => {
+        const res = await ConfigService.getConfig()
+        dispatch(setConfig({
+            aiCallDepth: res.ai_call_depth,
+            envFile: res.env_file,
+            logLevel: res.log_level,
+            ruleset: res.ruleset,
+            sourcePath: res.source_path
+        }))
+        console.log(res, 'config fetched')
+        return res
+    },
+})
+
+const {
+    data: envRes,
+    isFetching: isFetchingEnv,
+} = useQuery({
+    queryKey: [QueryKey.BACKENDENV],
+    queryFn: async () => {
+        const res = await ConfigService.getEnv()
+        dispatch(setEnv({
+            LINTAI_MAX_LLM_TOKENS: res.LINTAI_MAX_LLM_TOKENS,
+            LINTAI_MAX_LLM_COST_USD: res.LINTAI_MAX_LLM_COST_USD,
+            LINTAI_MAX_LLM_REQUESTS: res.LINTAI_MAX_LLM_REQUESTS,
+            LINTAI_LLM_PROVIDER: res.LINTAI_LLM_PROVIDER,
+            LLM_ENDPOINT_URL: res.LLM_ENDPOINT_URL,
+            LLM_API_VERSION: res.LLM_API_VERSION,
+            LLM_MODEL_NAME: res.LLM_MODEL_NAME,
+        }))
+        console.log(res, 'env fetched')
+        return res
+    },
+    initialData: [],
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+})
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -114,6 +169,11 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
     }
   }
 
+
+  // console.log(config)
+
+
+
   return (
     <div>
       {/* Header */}
@@ -138,7 +198,7 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
                 </button>
               )}
 
-              <h2 className="text-2xl font-bold">{headerButton?.title}</h2>
+              <h2 className="text-2xl font-bold ml-6">{headerButton?.title}</h2>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -151,7 +211,7 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
                 {headerButton.label}
               </button>
             )}
-   
+
           </div>
         </div>
       </nav>
@@ -159,9 +219,8 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-0 left-0 z-50 h-full w-40 bg-gray-100 transition-transform ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } sm:translate-x-0 md:translate-x-0`}
+        className={`fixed top-0 left-0 z-50 h-full w-50 bg-gray-100 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } sm:translate-x-0 md:translate-x-0`}
       >
         <div className="flex h-full flex-col justify-between p-4">
           <div>
@@ -169,22 +228,21 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
               <h2 className="text-primary mb-3 text-2xl font-bold">
                 Lint Ai
               </h2>
-             
+
             </div>
 
             <ul
               className="space-y-2 text-gray-700"
               onClick={handleSidebarClick}
             >
-     
+
               <li>
                 <button
                   onClick={async () => navigate('/')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${
-                    !isActive('/')
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
-                  }`}
+                    }`}
                 >
                   <TbLayoutDashboard
                     size={24}
@@ -196,31 +254,29 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
               <li>
                 <button
                   onClick={async () => navigate('/inventory')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${
-                    !isActive('/inventory')
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/inventory')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
-                  }`}
+                    }`}
                 >
-                  <TbServer size={24} className="mr-2"  />
-                  Inventory
+                  <TbBox size={24} className="mr-2" />
+                  AI Inventory
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => setConfigModalOpen(true)}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${
-                    configModalOpen
-                      ? 'bg-primary text-white'
-                      : 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
-                  }`}
+                  onClick={async () => navigate('/configuration')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/configuration')
+                      ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
+                      : 'bg-primary text-white'
+                    }`}
                 >
-                  <TbServer size={24} className="mr-2" />
-                  Configuration
+                  <TbSettings size={24} className="mr-2" />
+                  Setting
                 </button>
               </li>
-        
-         
+
+
 
             </ul>
           </div>
@@ -239,15 +295,7 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
         </div>
       </aside>
 
-      {/* Configuration Modal */}
-      {configModalOpen && (
-        <ConfigurationModal onClose={() => setConfigModalOpen(false)} title="Configuration">
-          <div>
-            <p>Configuration settings go here.</p>
-            {/* Add configuration form or content here */}
-          </div>
-        </ConfigurationModal>
-      )}
+
 
       {addVisible && headerButton?.component}
     </div>
