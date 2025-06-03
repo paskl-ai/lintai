@@ -12,10 +12,12 @@ interface FileItem {
 interface FileSystemPageProps {
     handleScan: (path: string) => void
   setIsModalOpen: (isOpen: boolean) => void
+  startLocation:string
 }
 
-const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalOpen}) => {
-  const [currentPath, setCurrentPath] = useState<string>('')
+const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalOpen,startLocation}) => {
+  const [currentPath, setCurrentPath] = useState<string>(startLocation)
+  console.log(startLocation,'startlocation')
   const [items, setItems] = useState<FileItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [localSearchQuery, setLocalSearchQuery] = useState<string>('')
@@ -106,7 +108,7 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
               <p>Loading...</p>
             ) : (
               <ul className="space-y-2">
-                {items.map((item) => (
+                {items?.map((item) => (
                   <li
                     key={item.path}
                     className={`flex items-center space-x-2 cursor-pointer ${

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FiChevronDown, FiChevronRight, FiSearch, FiSettings, FiFilter, FiFolder } from 'react-icons/fi'
+import { FiChevronDown, FiChevronRight, FiSearch,FiFolder } from 'react-icons/fi'
 import { scanInventoryDTO, ScanService, startScanDTO } from '../../api/services/Scan/scan.api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-toastify'
@@ -7,8 +7,6 @@ import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { resetJob, startJob } from '../../redux/services/ServerStatus/server.status.slice'
 import { QueryKey } from '../../api/QueryKey'
 import CommonButton from '../../components/buttons/CommonButton'
-import EntityFilter from '../../components/filters/EntityFilter'
-import { TbChartInfographic, TbGraph, TbNetwork } from 'react-icons/tb'
 import { useNavigate } from 'react-router'
 import FileSystemPage from '../filesystem/filesystem.page'
 
@@ -217,7 +215,7 @@ const body={
         </span>
     )
 
-   
+   console.log(configValues?.config?.sourcePath,'startLocation')
 
     return (
         <div className="flex sm:ml-50">
@@ -283,7 +281,7 @@ const body={
                         <div className="w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
                         
                             <div className="flex-1 overflow-y-auto p-4">
-                                <FileSystemPage setIsModalOpen={setIsFileSystemModalOpen} handleScan={(e)=>handleFolderSelection(e)} />
+                                <FileSystemPage startLocation={configValues?.config?.sourcePath} setIsModalOpen={setIsFileSystemModalOpen} handleScan={(e)=>handleFolderSelection(e)} />
                             </div>
                         </div>
                     </div>

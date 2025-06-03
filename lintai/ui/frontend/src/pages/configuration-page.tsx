@@ -4,6 +4,7 @@ import { ConfigDTO, ConfigService, EnvPayload } from '../api/services/Config/con
 import { QueryKey } from '../api/QueryKey'
 import { useAppDispatch, useAppSelector } from '../redux/services/store'
 import { setConfig, setEnv, setLlmProvider, setMaxLlmCost, setMaxLlmRequests, setMaxLlmTokens, setLlmApiVersion, setLlmEndpointUrl, setLlmModelName } from '../redux/services/Config/config.slice'
+import FileSystemPage from './filesystem/filesystem.page'
 
 
 const ConfigurationPage: React.FC = () => {
@@ -16,6 +17,7 @@ const ConfigurationPage: React.FC = () => {
     const [logLevel, setLogLevel] = useState<string>(config?.logLevel || 'info')
     const [ruleset, setRuleset] = useState<string | null>(config?.ruleset || null)
     const [envFile, setEnvFile] = useState<string | null>(config?.envFile || null)
+    const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState<boolean>(false)
 
     // Environment state
     const [llmProvider, setLlmProviderState] = useState<string | null>(env?.LINTAI_LLM_PROVIDER || null)
@@ -133,7 +135,11 @@ const ConfigurationPage: React.FC = () => {
         updateConfig(config)
         updateEnv(envPayload)
     }
-
+    const handleFolderSelection=(path:string)=>{
+        setSourcePath(path)
+        console.log(path,"path for the folder selected")
+      }
+      
     return (
         <div className="p-6 sm:ml-50">
             {/* Config Section */}
@@ -141,6 +147,7 @@ const ConfigurationPage: React.FC = () => {
             <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Source Path</label>
                 <input
+                onClick={()=>setIsFileSystemModalOpen(true)}
                     type="text"
                     value={sourcePath}
                     onChange={(e) => setSourcePath(e.target.value)}
@@ -262,7 +269,19 @@ const ConfigurationPage: React.FC = () => {
                     {isUpdatingConfig || isUpdatingEnv ? 'Saving...' : 'Save'}
                 </button>
             </div>
+            {isFileSystemModalOpen && (
+                    <div className="fixed inset-0  flex justify-center items-center z-50">
+                        <div className="w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
+                        
+                            <div className="flex-1 overflow-y-auto p-4">
+                                <FileSystemPage setIsModalOpen={setIsFileSystemModalOpen} handleScan={(e)=>handleFolderSelection(e)} />
+                            </div>
+                        </div>
+                    </div>
+                )}
         </div>
+
+        
     )
 }
 
