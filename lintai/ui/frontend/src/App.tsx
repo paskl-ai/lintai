@@ -11,6 +11,7 @@ import { store } from './redux/services/store'
 
 import RootRouter from './Router/RootRouter'
 import { ToastContainer } from 'react-toastify'
+import LintToastContainer from './components/Toast/toast.component'
 
 const queryClientConfig = {
   defaultOptions: {
@@ -39,7 +40,7 @@ const App: React.FC = () => {
       <Provider store={store}>
         <QueryClientProvider client={queryClient}>
           <ErrorBoundary fallback={<ErrorPage />}>
-          <ToastContainer />
+          <LintToastContainer />
             <BrowserRouter>
               <RootRouter />
             </BrowserRouter>
