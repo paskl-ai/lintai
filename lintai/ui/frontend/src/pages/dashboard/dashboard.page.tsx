@@ -82,7 +82,9 @@ const Dashboard = () => {
             return res
         },
         onSuccess: (res, data) => {
-            toast.success('Scan starting!')
+            // toast.success('Scan starting!')
+            toast.loading(`Scanning path: ${data?.path||configValues?.config?.sourcePath}`)
+
             setTimeout(() => {
                 queryClient.invalidateQueries({ queryKey: [QueryKey.JOB] })
             }, 2000)
@@ -100,12 +102,12 @@ const Dashboard = () => {
             }
         },
         onError: (error: any) => {
-            toast.error(error.message || 'Failed to create server.')
+            toast.error(error.message || 'Failed to scan path.')
         },
     })
 
 
-    console.log(runId)
+    // console.log(runId)
     const {
         data: scans,
         isFetching: isFetchingScan,
@@ -116,6 +118,7 @@ const Dashboard = () => {
 
             if (res?.data||res?.findings) {
                 dispatch(resetJob())
+                toast.dismiss()
             }
 
             return res
@@ -137,6 +140,8 @@ const Dashboard = () => {
 
             if (res?.data||res?.findings) {
                 dispatch(resetJob())
+                toast.dismiss()
+
             }
 
             return res.report
@@ -230,10 +235,12 @@ const body={
             <main className="flex-1 p-6">
                 {/* Top Bar */}
                 <div className="flex items-center justify-between mb-6">
-                <div className="flex flex-row gap-2 items-center">
-                    <h3 className="font-bold mb-3 text-gray-700">Severity</h3>
+                <div className="flex flex-row gap-2 items-center justify-between ">
+                    <h3 className="font-bold  text-gray-700">Severity</h3>
+                    <div className="flex items-end space-x-4">
+
                     {['blocker', 'high', 'medium', 'low'].map((severity) => (
-                        <div key={severity} className="flex items-center justify-between mb-3">
+                        <div key={severity} className="flex items-center justify-between ">
                             <button
                                 className={`px-4 py-2 rounded flex items-center border ${
                                     severityFilter.includes(severity)
@@ -252,6 +259,7 @@ const body={
                             </button>
                         </div>
                     ))}
+                    </div>
                 </div>
                     <div className="flex items-center space-x-4">
                         <div className="relative">

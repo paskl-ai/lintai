@@ -12,15 +12,16 @@ interface FileItem {
 interface FileSystemPageProps {
     handleScan: (path: string) => void
   setIsModalOpen: (isOpen: boolean) => void
-  startLocation:string
+  startLocation?:string
 }
 
 const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalOpen,startLocation}) => {
-  const [currentPath, setCurrentPath] = useState<string>(startLocation)
+  const [currentPath, setCurrentPath] = useState<string>(startLocation||'')
   console.log(startLocation,'startlocation')
   const [items, setItems] = useState<FileItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [localSearchQuery, setLocalSearchQuery] = useState<string>('')
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
 
   const fetchDirectory = async (path: string | null = null, query: string = '') => {
     setLoading(true)
@@ -38,18 +39,19 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
   const goBack = () => {
     if (currentPath) {
       const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/'
-      fetchDirectory(parentPath)
+      fetchDirectory()
     }
   }
 
   const handleSelect = () => {
-    handleScan(currentPath)
-    console.log('Selected Path:', currentPath)
+    const pathToScan = selectedFile || currentPath // Use selected file if available, otherwise use current directory
+    handleScan(pathToScan)
+    console.log('Selected Path:', pathToScan)
     setIsModalOpen(false)
   }
 
   useEffect(() => {
-    fetchDirectory() // Fetch the root directory when the modal opens
+    fetchDirectory(startLocation) // Fetch the root directory when the modal opens
   }, [])
 
   const debouncedSearch = debounce((query: string) => {
@@ -65,6 +67,10 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
   const handleItemClick = (item: FileItem) => {
     if (item.dir) {
       fetchDirectory(item.path) // Fetch the contents of the clicked directory
+      setSelectedFile(null) // Clear selected file when navigating into a directory
+    } else {
+      setSelectedFile(item.path) // Set the selected file path
+      setCurrentPath(item.path) // Update currentPath with the selected file's path
     }
   }
 
@@ -111,9 +117,9 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
                 {items?.map((item) => (
                   <li
                     key={item.path}
-                    className={`flex items-center space-x-2 cursor-pointer ${
+                    className={`flex items-center space-x-2 cursor-pointer p-2 ${
                       item.dir ? 'text-primary' : 'text-gray-800'
-                    }`}
+                    } ${selectedFile === item.path ? 'bg-amber-200' : ''}`} // Highlight selected file
                     onClick={() => handleItemClick(item)}
                   >
                     <span>

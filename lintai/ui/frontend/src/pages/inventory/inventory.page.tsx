@@ -88,18 +88,20 @@ const Inventory = () => {
     };
 
     const handleScanSelection = (record: any) => {
-        handleNetworkView(record?.elements||null)
+        handleNetworkView(record?.elements || null)
         // setSelectedScan(record?.elements || null);
     };
 
-     // 1️⃣ Mutation to start a scan
-     const { mutate: startScanInventory, isPending: isPendingStartInventoryServer } = useMutation({
-        mutationFn: async (body:scanInventoryDTO ) => {
+    // 1️⃣ Mutation to start a scan
+    const { mutate: startScanInventory, isPending: isPendingStartInventoryServer } = useMutation({
+        mutationFn: async (body: scanInventoryDTO) => {
             const res = await ScanService.scanInventory(body)
             return res
         },
         onSuccess: (res, data) => {
-            toast.success('Inventory scan starting!')
+            // toast.success('Inventory scan starting!')
+            toast.loading(`Scanning path: ${data?.path || configValues?.config?.sourcePath}`)
+
             setTimeout(() => {
                 queryClient.invalidateQueries({ queryKey: [QueryKey.JOB] })
             }, 2000)
@@ -113,6 +115,7 @@ const Inventory = () => {
                     }),
                 )
             } else {
+                toast.dismiss()
                 dispatch(resetJob())
             }
         },
@@ -126,12 +129,14 @@ const Inventory = () => {
         data: scans,
         isFetching: isFetchingScan,
     } = useQuery({
-        queryKey: [QueryKey.JOB+'inventory'],
+        queryKey: [QueryKey.JOB + 'inventory'],
         queryFn: async () => {
             const res = await ScanService.getResults(runId!!)
 
             if (res?.data) {
                 dispatch(resetJob())
+                toast.dismiss()
+
             }
 
             return res
@@ -143,28 +148,28 @@ const Inventory = () => {
         enabled: !!runId,
     })
 
-       const {
-            data: lastscan,
-            isFetching: isFetchingLastScan,
-        } = useQuery({
-            queryKey: [QueryKey.JOB+'last'],
-            queryFn: async () => {
-                const res = await ScanService.getLastResults()
-    
-             
-    
-                return res?.report
-            },
-            initialData: [],
-            refetchOnMount: true,
-            refetchOnWindowFocus: false,
-            refetchInterval: isProcessing ? 3000 : false,
-            enabled: !!(!scans?.data?.records )
-        })
+    const {
+        data: lastscan,
+        isFetching: isFetchingLastScan,
+    } = useQuery({
+        queryKey: [QueryKey.JOB + 'last'],
+        queryFn: async () => {
+            const res = await ScanService.getLastResults()
+
+
+
+            return res?.report
+        },
+        initialData: [],
+        refetchOnMount: true,
+        refetchOnWindowFocus: false,
+        refetchInterval: isProcessing ? 3000 : false,
+        enabled: !!(!scans?.data?.records)
+    })
     // Derived state from query
     console.log(scans, 'inventory scans data')
-    const llmUsage = scans?.llm_usage||lastscan?.llm_usage;
-    const inventoryRecords = scans?.data?.records || lastscan?.data?.records|| [];
+    const llmUsage = scans?.llm_usage || lastscan?.llm_usage;
+    const inventoryRecords = scans?.data?.records || lastscan?.data?.records || [];
 
     // Filter inventory records based on the search query
     const filteredInventoryRecords = inventoryRecords.filter((record: any) => {
@@ -175,10 +180,10 @@ const Inventory = () => {
         )
     })
 
-    const handleFolderSelection = (path:string) => {
+    const handleFolderSelection = (path: string) => {
         startScanInventory({
             path: path,
-            logLevel:logLevel,
+            logLevel: logLevel,
             depth: scanDepth,
         })
 
@@ -206,7 +211,7 @@ const Inventory = () => {
         setNetworkRecord(null);
     };
 
-    console.log(networkRecord,'network record')
+    console.log(networkRecord, 'network record')
 
     return (
         <div className="p-6 flex sm:ml-50">
@@ -214,38 +219,42 @@ const Inventory = () => {
             {/* Main Content */}
             <main className="flex-1 ">
                 {/* Top Bar */}
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center space-x-4 font-bold"> Scan Inventories With AI</div>
-                    <div className="flex items-end space-x-4">
-                        <div className="relative">
-                            <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Search files..."
-                                className="pl-10 pr-4 py-2 border rounded w-64"
-                                value={searchQuery}
-                                onChange={handleFileSearchChange}
-                            />
+                <div className="flex flex-row items-center justify-between mb-6">
+                        <div>
+                            <h3 className="font-bold  text-gray-700">Scan Inventories With AI</h3>
+
                         </div>
-                    
-                        <CommonButton
-                            className="bg-primary text-white px-4 py-2 rounded flex items-center"
-                            onClick={() => setIsFileSystemModalOpen(true)}
-                            loading={isProcessing}
-                        >
-                            <FiFolder className="mr-2" />
-                            Run Scan
-                        </CommonButton>
+                        <div className="flex  space-x-4">
+                            <div className="relative">
+                                <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
+                                <input
+                                    type="text"
+                                    placeholder="Search files..."
+                                    className="pl-10 pr-4 py-2 border rounded w-64"
+                                    value={searchQuery}
+                                    onChange={handleFileSearchChange}
+                                />
+                            </div>
+
+                            <CommonButton
+                                className="bg-primary text-white px-4 py-2 rounded flex items-center"
+                                onClick={() => setIsFileSystemModalOpen(true)}
+                                loading={isProcessing}
+                            >
+                                <FiFolder className="mr-2" />
+                                Run Scan
+                            </CommonButton>
+                        </div>
                     </div>
-                </div>
+             
 
                 {/* File System Modal */}
                 {isFileSystemModalOpen && (
                     <div className="fixed inset-0  flex justify-center items-center z-50">
                         <div className=" w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
-                        
+
                             <div className="flex-1 overflow-y-auto p-4">
-                                <FileSystemPage setIsModalOpen={setIsFileSystemModalOpen} handleScan={handleFolderSelection} />
+                                <FileSystemPage startLocation={configValues?.config?.sourcePath} setIsModalOpen={setIsFileSystemModalOpen} handleScan={handleFolderSelection} />
                             </div>
                         </div>
                     </div>
@@ -272,7 +281,7 @@ const Inventory = () => {
                 )}
 
                 {/* Configuration Section */}
-                <div 
+                <div
                     className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4 mt-6 cursor-pointer"
                     onClick={handleNavigateToConfig}
                 >
@@ -297,15 +306,15 @@ const Inventory = () => {
                                 </div>
                                 <div className="flex space-x-4">
                                     <button
-                                        className= "border-1 border-blue-500 hover:bg-blue-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
+                                        className="border-1 border-blue-500 hover:bg-blue-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
                                         onClick={() => handleNetworkView(record)}
                                     >
-                                       <p>View</p> 
-                                        <TbGraph/>
+                                        <p>View</p>
+                                        <TbGraph />
                                     </button>
                                     <a
                                         href={`vscode://file/${record.at}`}
-                                        className= "border-1 border-green-500 hover:bg-green-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
+                                        className="border-1 border-green-500 hover:bg-green-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
                                     >
                                         Edit
                                     </a>
@@ -324,9 +333,9 @@ const Inventory = () => {
 
                 {/* Network Visualization Modal */}
                 {isNetworkModalOpen && (
-                    <div 
-                 
-                    className="fixed inset-0  bg-opacity-0 flex justify-end items-center z-50   transition duration-300 ease-in-out slide-in-from-right">
+                    <div
+
+                        className="fixed inset-0  bg-opacity-0 flex justify-end items-center z-50   transition duration-300 ease-in-out slide-in-from-right">
                         <div className="bg-white w-2/4 h-full shadow-lg overflow-hidden flex flex-col">
                             <div className="flex justify-between items-center p-4 border-b">
                                 <h2 className="text-lg font-semibold">Data Flow Visualization</h2>

@@ -10,6 +10,7 @@ import ErrorPage from './pages/error/error.page'
 import { store } from './redux/services/store'
 
 import RootRouter from './Router/RootRouter'
+import { ToastContainer } from 'react-toastify'
 
 const queryClientConfig = {
   defaultOptions: {
@@ -38,6 +39,7 @@ const App: React.FC = () => {
       <Provider store={store}>
         <QueryClientProvider client={queryClient}>
           <ErrorBoundary fallback={<ErrorPage />}>
+          <ToastContainer />
             <BrowserRouter>
               <RootRouter />
             </BrowserRouter>
