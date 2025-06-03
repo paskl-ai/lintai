@@ -234,53 +234,53 @@ def health():
 
 
 # ─────────── file system ──────
-# @app.get("/api/fsroot")
-# def list_dir(path: str | None = None):
-#     """
-#     List files in a directory, relative to the workspace root.
-#     If no path is given, lists the workspace root.
-#     """
-#     p = _safe(path or ROOT)
-#     if not p.is_dir():
-#         raise HTTPException(400, "not a directory")
-#     items = [
-#         {
-#             "name": f.name,
-#             "path": str(p / f.name).removeprefix(str(ROOT) + "/"),
-#             "dir": f.is_dir(),
-#         }
-#         for f in sorted(p.iterdir())
-#         if not f.name.startswith(".")  # ignore dotfiles
-#     ]
-#     return {
-#         "cwd": "" if p == ROOT else str(p.relative_to(ROOT)),
-#         "items": items,
-#     }
-
-
-# ─────────── file system ──────
 @app.get("/api/fs")
 def list_dir(path: str | None = None):
     """
-    List files in a directory, relative to the OS root.
-    If no path is given, lists the OS root.
+    List files in a directory, relative to the workspace root.
+    If no path is given, lists the workspace root.
     """
-    p = Path(path or "/").resolve()  # Use OS root as the base
+    p = _safe(path or ROOT)
     if not p.is_dir():
         raise HTTPException(400, "not a directory")
     items = [
         {
             "name": f.name,
-            "path": str(p / f.name),
+            "path": str(p / f.name).removeprefix(str(ROOT) + "/"),
             "dir": f.is_dir(),
         }
         for f in sorted(p.iterdir())
         if not f.name.startswith(".")  # ignore dotfiles
     ]
     return {
-        "cwd": str(p),
+        "cwd": "" if p == ROOT else str(p.relative_to(ROOT)),
         "items": items,
     }
+
+
+# ─────────── file system ──────
+# @app.get("/api/fs")
+# def list_dir(path: str | None = None):
+#     """
+#     List files in a directory, relative to the OS root.
+#     If no path is given, lists the OS root.
+#     """
+#     p = Path(path or "/").resolve()  # Use OS root as the base
+#     if not p.is_dir():
+#         raise HTTPException(400, "not a directory")
+#     items = [
+#         {
+#             "name": f.name,
+#             "path": str(p / f.name),
+#             "dir": f.is_dir(),
+#         }
+#         for f in sorted(p.iterdir())
+#         if not f.name.startswith(".")  # ignore dotfiles
+#     ]
+#     return {
+#         "cwd": str(p),
+#         "items": items,
+#     }
 
 
 
