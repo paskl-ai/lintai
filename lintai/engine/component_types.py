@@ -16,4 +16,13 @@ def classify_sink(sink: str) -> str:
     for key in SINK_TYPE_MAP:
         if key in sink:
             return SINK_TYPE_MAP[key]
+    
+    # Fallback heuristics for execution patterns
+    if sink.endswith(".run") or sink.endswith(".run_stream"):
+        return "Chain"
+    if sink.endswith(".close") or ".close()" in sink:
+        return "Lifecycle"
+    if sink == "main":
+        return "EntryPoint"
+
     return "Unknown"
