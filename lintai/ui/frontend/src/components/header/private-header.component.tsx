@@ -248,7 +248,7 @@ const {
                     size={24}
                     className="mr-2"
                   />
-                  Dashboard
+                  Scan
                 </button>
               </li>
               <li>
@@ -260,7 +260,7 @@ const {
                     }`}
                 >
                   <TbBox size={24} className="mr-2" />
-                  AI Inventory
+                  Scan with AI
                 </button>
               </li>
               <li>
