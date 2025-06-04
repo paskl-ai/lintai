@@ -6,11 +6,17 @@ FRAMEWORK_SIGNATURES = {
         "classes": ["ChatOpenAI", "PromptTemplate", "Tool", "AgentExecutor"],
     },
     "AutoGen": {
-        "imports": ["autogen"],
-        "classes": ["Agent", "GroupChat", "AssistantAgent"],
+        "imports": ["autogen", "autogen_agentchat", "autogen_ext"],
+        "classes": ["Agent", "AssistantAgent", "UserProxyAgent", "GroupChat", "RoundRobinGroupChat", "MultimodalWebSurfer"]
     },
-    "CrewAI": {"imports": ["crewai"], "classes": ["Crew", "Task", "Agent"]},
-    "DSPy": {"imports": ["dspy"], "classes": ["Predict", "Module"]},
+    "CrewAI": {
+        "imports": ["crewai"],
+        "classes": ["Crew", "Task", "Agent"]
+    },
+    "DSPy": {
+        "imports": ["dspy"],
+        "classes": ["Predict", "Module"]
+    },
     "SemanticKernel": {
         "imports": ["semantic_kernel"],
         "classes": ["Kernel", "Planner"],
