@@ -11,6 +11,7 @@ Endpoints
 *  GET        /api/runs        – history
 *  GET        /api/results/{id}[ /filter ]   – reports & helpers
 *  GET        /api/last-result – fetch the most recent run result
+*  GET        /api/history     – fetch the history of all scan runs
 """
 
 from __future__ import annotations
@@ -160,9 +161,12 @@ def _save_runs(lst: list[RunSummary]):
     _json_dump(RUNS_FILE, [r.model_dump() for r in lst])
 
 
-def _add_run(r: RunSummary):
+def _add_run(r: RunSummary, files: list[str] = None):
     lst = _runs()
-    lst.append(r)
+    run_data = r.model_dump()
+    if files:
+        run_data["files"] = files  # Include scanned files in the run data
+    lst.append(run_data)
     _save_runs(lst)
 
 
@@ -258,32 +262,6 @@ def list_dir(path: str | None = None):
     }
 
 
-# ─────────── file system ──────
-# @app.get("/api/fs")
-# def list_dir(path: str | None = None):
-#     """
-#     List files in a directory, relative to the OS root.
-#     If no path is given, lists the OS root.
-#     """
-#     p = Path(path or "/").resolve()  # Use OS root as the base
-#     if not p.is_dir():
-#         raise HTTPException(400, "not a directory")
-#     items = [
-#         {
-#             "name": f.name,
-#             "path": str(p / f.name),
-#             "dir": f.is_dir(),
-#         }
-#         for f in sorted(p.iterdir())
-#         if not f.name.startswith(".")  # ignore dotfiles
-#     ]
-#     return {
-#         "cwd": str(p),
-#         "items": items,
-#     }
-
-
-
 # ─────────── config (JSON) ─────
 @app.get("/api/config", response_model=ConfigModel)
 def cfg_get():
@@ -345,6 +323,38 @@ def last_result():
     return {"run": latest_run, "report": report}
 
 
+# ─────────── /history ──────────
+@app.get("/api/history")
+def history():
+    """
+    Fetch the history of all scan runs along with their stored reports if available.
+    Includes type of scans, date of scans, and files scanned.
+    """
+    runs = _runs()
+    if not runs:
+        raise HTTPException(404, "No runs found")
+    
+    history = []
+    for run in runs:
+        report_path = _report_path(run.run_id, run.type)
+        report = None
+        errors = None
+        files = run.get("files", [])  # Retrieve scanned files if available
+        if report_path.exists():
+            report = json.loads(report_path.read_text())
+            errors = report.get("errors", None)  # Extract errors if present
+        history.append({
+            "type": run.type,
+            "date": run.created.isoformat(),
+            "files": files,
+            "errors": errors,
+            "run": run,
+            "report": report,
+        })
+    
+    return history
+
+
 # ─────────── /scan ─────────────
 @app.post("/api/scan", response_model=RunSummary)
 async def scan(
@@ -360,10 +370,12 @@ async def scan(
     work.mkdir()
 
     # 2) save each UploadFile, recreating any nested folders
+    scanned_files = []
     for up in files:
         dest = work / up.filename  # up.filename may be "src/App.tsx"
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(await up.read())
+        scanned_files.append(up.filename)  # Track scanned files
 
     # 3) decide what to scan: the uploaded dir, or the provided path
     target = str(work if files else (path or _load_cfg().source_path))
@@ -386,8 +398,9 @@ async def scan(
         status="pending",
         path=reported_path,
     )
-    _add_run(run)
+    _add_run(run, scanned_files)  # Include scanned files in the run record
     return run
+
 
 # ─────────── /inventory ────────
 @app.post("/api/inventory", response_model=RunSummary)

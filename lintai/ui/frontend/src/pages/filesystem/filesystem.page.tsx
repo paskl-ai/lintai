@@ -79,9 +79,10 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
       <div className="fixed inset-0 bg-primary/70  flex justify-center items-center z-50">
         <div className="bg-white w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
           <div className="flex justify-between items-center p-4 border-b">
+         
             <p className="text-gray-600">Current Path: {currentPath || '/'}</p>
             <div className="flex space-x-4">
-           
+         
               <button
                 className="text-red-500 font-bold"
                 onClick={() => setIsModalOpen(false)}
@@ -101,14 +102,7 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <div className="mb-4">
-              {currentPath && currentPath !== '/' && (
-                <button
-                  className="text-blue-700 underline"
-                  onClick={goBack}
-                >
-                  Go Back
-                </button>
-              )}
+        
             </div>
             {loading ? (
               <p>Loading...</p>
@@ -144,12 +138,24 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
             )}
              
           </div>
+<div className='flex flex-row justify-between min-w-full'>
+{ (
+                                      <CommonButton
+                                      disabled={!(currentPath && currentPath !== '/')}
+                                className={`${!(currentPath && currentPath !== '/')?"bg-gray-500":'bg-orange'}  text-white px-4 py-2 rounded flex  items-center`}
+                  onClick={goBack}
+                >
+                  Go Back
+                </CommonButton>
+              )}
           <CommonButton
                             className="bg-primary text-white px-4 py-2 rounded flex items-center self-end m-3"
                             onClick={handleSelect}
               >
                 Select
               </CommonButton>
+</div>
+      
         </div>
       </div>
     </>

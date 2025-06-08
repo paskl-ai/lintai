@@ -42,6 +42,11 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
   > = {
     '/': {
       // label: 'Add New Repo',
+      title: 'Dashboard',
+      // onClick: async () => navigate('/filesystem'),
+    },
+    '/scan': {
+      // label: 'Add New Repo',
       title: 'Reports',
       // onClick: async () => navigate('/filesystem'),
     },
@@ -235,11 +240,25 @@ const {
               className="space-y-2 text-gray-700"
               onClick={handleSidebarClick}
             >
-
-              <li>
+  <li>
                 <button
                   onClick={async () => navigate('/')}
                   className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/')
+                      ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
+                      : 'bg-primary text-white'
+                    }`}
+                >
+                  <TbLayoutDashboard
+                    size={24}
+                    className="mr-2"
+                  />
+                  Dashboard
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={async () => navigate('/scan')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/scan')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}

@@ -60,6 +60,17 @@ class Scan {
         return response.data
     }
 
+    async getHistory() {
+        const response = await api.get('/api/history'); // Updated endpoint for history
+        return response.data.map((item: any) => ({
+            type: item.type,
+            date: item.date,
+            files: item.files,
+            errors: item.errors,
+            report: item.report,
+        }));
+    }
+
     async stopScan(runId: string) {
         // No equivalent endpoint provided for stopping a scan
         throw new Error('stopScan endpoint is not defined in the provided API list.')

@@ -7,12 +7,15 @@ import DataFlowVisualise from '../pages/graph/DataFlowVisualise'
 import FileSystemPage from '../pages/filesystem/filesystem.page'
 import Inventory from '../pages/inventory/inventory.page'
 import ConfigurationPage from '../pages/configuration-page'
+import Scan from '../pages/scan/scan.page'
 
 const PublicRouter = () => {
   return (
     <Routes>
       <Route path="" element={<DefaultLayout />}>
-        <Route path="/" element={<Dashboard />} />
+      <Route path="/" element={<Dashboard />} />
+
+        <Route path="/scan" element={<Scan />} />
         <Route path="/data-flow" element={<DataFlowVisualise />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/configuration" element={<ConfigurationPage />} />

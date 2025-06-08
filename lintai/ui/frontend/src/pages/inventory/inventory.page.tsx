@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router'
 import FileSystemPage from '../filesystem/filesystem.page'
 import CytoscapeGraph from '../../components/cytoscapegraph/CytoscapeGraph'
 import DataFlowVisualise from '../graph/DataFlowVisualise'; // Import the DataFlowVisualise component
+import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
 
 interface Finding {
     owasp_id: string
@@ -221,10 +222,12 @@ const Inventory = () => {
                 {/* Top Bar */}
                 <div className="flex flex-row items-center justify-between mb-6">
                         <div>
-                            <h3 className="font-bold  text-gray-700">Scan Inventories With AI</h3>
+                            <h3 className="font-bold  text-gray-700">Scan Inventory</h3>
 
                         </div>
-                        <div className="flex  space-x-4">
+                        <div className="flex items-center gap-2">
+                        {/* Configuration Section */}
+                <ConfigurationInfo/>
                             <div className="relative">
                                 <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
                                 <input
@@ -237,12 +240,12 @@ const Inventory = () => {
                             </div>
 
                             <CommonButton
-                                className="bg-primary text-white px-4 py-2 rounded flex items-center"
+                                className=" bg-primary text-white px-4 py-2 rounded flex w-full items-center"
                                 onClick={() => setIsFileSystemModalOpen(true)}
                                 loading={isProcessing}
                             >
                                 <FiFolder className="mr-2" />
-                                Run Scan
+                                Run scan
                             </CommonButton>
                         </div>
                     </div>
@@ -280,16 +283,7 @@ const Inventory = () => {
                     </div>
                 )}
 
-                {/* Configuration Section */}
-                <div
-                    className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4 mt-6 cursor-pointer"
-                    onClick={handleNavigateToConfig}
-                >
-                    <h3 className="text-lg font-semibold text-gray-800">Configuration</h3>
-                    <pre className="mt-2 text-sm text-gray-700">
-                        {JSON.stringify(configValues, null, 2)}
-                    </pre>
-                </div>
+             
 
                 {/* Inventory Records List */}
                 <div>
