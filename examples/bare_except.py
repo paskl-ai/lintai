@@ -8,5 +8,6 @@ def read_config(path):
         # We don’t even log what went wrong!
         return None
 
+
 if __name__ == "__main__":
     print(read_config("/etc/app/config.yml"))

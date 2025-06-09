@@ -57,6 +57,7 @@ CONFIG_JSON = DATA_DIR / "config.json"  # *UI* prefs (depth, log-level …)
 CFG_ENV = DATA_DIR / "config.env"  # non-secret
 SECR_ENV = DATA_DIR / "secrets.env"  # API keys (0600)
 
+
 # ──────────────────────── Pydantic models ─────────────────────
 class ConfigModel(BaseModel):
     """Preferences shown in the UI (mirrors CLI flags)."""
@@ -158,15 +159,16 @@ def _runs() -> list[RunSummary]:
 
 
 def _save_runs(lst: list[RunSummary]):
-    _json_dump(RUNS_FILE, [r.model_dump() for r in lst])
+    # accept either RunSummary objects or plain dicts
+    serialised: list[dict] = []
+    for r in lst:
+        serialised.append(r.model_dump() if isinstance(r, RunSummary) else r)
+    _json_dump(RUNS_FILE, serialised)
 
 
-def _add_run(r: RunSummary, files: list[str] = None):
+def _add_run(r: RunSummary):
     lst = _runs()
-    run_data = r.model_dump()
-    if files:
-        run_data["files"] = files  # Include scanned files in the run data
-    lst.append(run_data)
+    lst.append(r)
     _save_runs(lst)
 
 
@@ -225,7 +227,7 @@ def _report_path(rid: str, kind: RunType) -> Path:
 app = FastAPI(title="Lintai UI", docs_url="/api/docs", redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173","http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -333,7 +335,7 @@ def history():
     runs = _runs()
     if not runs:
         raise HTTPException(404, "No runs found")
-    
+
     history = []
     for run in runs:
         report_path = _report_path(run.run_id, run.type)
@@ -343,15 +345,17 @@ def history():
         if report_path.exists():
             report = json.loads(report_path.read_text())
             errors = report.get("errors", None)  # Extract errors if present
-        history.append({
-            "type": run.type,
-            "date": run.created.isoformat(),
-            "files": files,
-            "errors": errors,
-            "run": run,
-            "report": report,
-        })
-    
+        history.append(
+            {
+                "type": run.type,
+                "date": run.created.isoformat(),
+                "files": files,
+                "errors": errors,
+                "run": run,
+                "report": report,
+            }
+        )
+
     return history
 
 
@@ -370,12 +374,10 @@ async def scan(
     work.mkdir()
 
     # 2) save each UploadFile, recreating any nested folders
-    scanned_files = []
     for up in files:
         dest = work / up.filename  # up.filename may be "src/App.tsx"
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(await up.read())
-        scanned_files.append(up.filename)  # Track scanned files
 
     # 3) decide what to scan: the uploaded dir, or the provided path
     target = str(work if files else (path or _load_cfg().source_path))
@@ -398,7 +400,7 @@ async def scan(
         status="pending",
         path=reported_path,
     )
-    _add_run(run, scanned_files)  # Include scanned files in the run record
+    _add_run(run)
     return run
 
 
@@ -455,13 +457,14 @@ def results(rid: str):
     data = json.loads(fp.read_text())
     print(f"Processing finding location data: {data}")  # Debug log
 
-    # strip the staging-dir prefix off each finding.location
-    if run.type is RunType.scan :
+    if run.type is RunType.scan:
+        findings = data.get("data", {}).get("findings", [])
+        if not findings:
+            raise HTTPException(500, "scan report missing 'findings'")
 
         base = (DATA_DIR / rid).resolve()
-        print(f"Processing finding location data: {data}")  # Debug log
 
-        for f in data["findings"]:
+        for f in findings:
             loc = f.get("location")
             if not loc:
                 continue
@@ -474,7 +477,6 @@ def results(rid: str):
                 pass
 
     return data
-
 
 
 # ---- findings filter helper

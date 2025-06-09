@@ -15,12 +15,15 @@
 - **Two analysis commands**
   - `lintai ai-inventory <src-code-path>` – list every AI call and its caller chain
   - `lintai scan <src-code-path>` – run all detectors, emit JSON (with _llm_usage_ summary)
-- **Browser UI** `lintai ui` – FastAPI backend + React / Cytoscape front-end (includes a **Settings** tab that edits your `.env`)
-- **LLM-usage budget** – hard caps on requests / tokens / cost — `LINTAI_MAX_LLM_TOKENS`, `LINTAI_MAX_LLM_COST_USD`, `LINTAI_MAX_LLM_REQUESTS`
+- **LLM budget guard-rails** – hard caps on requests / tokens / cost (`LINTAI_MAX_LLM_*`)
 - Modular detector registry (`entry_points`)
 - OWASP LLM Top-10 & MITRE ATT&CK baked in
 - DSL for custom rules
-- CI-friendly JSON output (SARIF coming soon)
+- CI-friendly JSON output (SARIF soon)
+
+### ⚠️ UI Notice
+
+A React/Cytoscape UI is under active development – not shipped in this cut.
 
 ---
 
@@ -28,34 +31,24 @@
 
 ### 1 · Install
 
-
-
-
 ```bash
-# end-users
-pip install lintai
-
-# full dev experience (tests + UI)
-pip install -e ".[dev,ui]"
+pip install lintai                    # core only
+pip install "lintai[openai]"          # + OpenAI detectors
+# or  "lintai[anthropic]"  "lintai[gemini]"  "lintai[cohere]"
+pip install "lintai[ui]"              # FastAPI server extras
 ```
 
-Add the provider you need:
+### 2 · Enable LLM detectors (optional but highly recommended)
 
 ```bash
-pip install "lintai[openai]"        # or  [anthropic]  [gemini]  [cohere]
-```
+# .env  (minimal)
+LINTAI_LLM_PROVIDER=openai                # azure / anthropic / gemini / cohere / dummy
+LLM_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx    # API key for above provider
 
-### 2 · Configure LLM detectors (optional)
-
-```bash
-# .env  — minimum
-LINTAI_LLM_PROVIDER=openai              # azure / anthropic / gemini / cohere / dummy
-LLM_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx # single key var for any provider
-
-# optional provider parameters
+# provider-specific knobs
 LLM_MODEL_NAME=gpt-4.1-mini
 LLM_ENDPOINT_URL=https://api.openai.com/v1/
-LLM_API_VERSION=2025-01-01-preview      # Azure default
+LLM_API_VERSION=2025-01-01-preview         # Required for Azure
 
 # hard budget caps
 LINTAI_MAX_LLM_TOKENS=50000
@@ -72,11 +65,10 @@ lintai ai-inventory src/ --ai-call-depth 4
 lintai scan src/
 ```
 
-### 4 · Launch UI (optional)
+### 4 · Launch REST server (Optional, React UI coming soon)
 
 ```bash
 lintai ui                     # REST docs at http://localhost:8501/api/docs
-yarn -C lintai/ui/frontend start   # React dev-server on :5173
 ```
 
 ---
@@ -127,13 +119,16 @@ Budget checks run _before_ the call; actual usage is recorded afterwards.
 
 lintai/
 ├── cli.py Typer entry-point
-├── ui/ FastAPI backend + React frontend stub
 ├── engine/ AST walker & AI-call analysis
 ├── detectors/ Static & LLM-backed rules
 ├── dsl/ Custom rule loader
-└── core/ Finding model, token-budget manager …
+├── llm/ Provider clients & token-budget manager
+├── components/ Maps common AI frameworks → canonical types
+├── core/ Finding & report model
+├── ui/ FastAPI backend (+ React UI coming soon)
+└── tests/ Unit / integration tests
 
----
+examples/ Sample code with insecure AI usage
 
 ## 🌐 REST API cheat-sheet
 
@@ -155,10 +150,11 @@ Auto-generated OpenAPI docs live at **`/api/docs`**.
 
 ## 📺 Roadmap
 
+- React JS UI support
 - SARIF + GitHub Actions template
-- VS Code extension (uses the REST API)
+- Additional AI frameworks recognition and categorization
+- Lintai VS Code extension
 - Live taint-tracking
-- JavaScript / TypeScript support
 
 ---
 
