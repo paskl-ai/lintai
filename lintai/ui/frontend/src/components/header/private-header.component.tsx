@@ -6,11 +6,20 @@ import {
 
   TbBox,
 
+  TbHome,
+
+  TbHome2,
+
   TbKey,
+  TbLayersDifference,
+  TbLayersLinked,
   TbLayoutDashboard,
 
   TbServer,
   TbSettings,
+  TbStack,
+  TbTerminal,
+  TbTerminal2,
 
 } from 'react-icons/tb'
 import { useNavigate } from 'react-router'
@@ -42,12 +51,12 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
   > = {
     '/': {
       // label: 'Add New Repo',
-      title: 'Dashboard',
+      title: 'Home',
       // onClick: async () => navigate('/filesystem'),
     },
     '/scan': {
       // label: 'Add New Repo',
-      title: 'Reports',
+      title: 'Findings',
       // onClick: async () => navigate('/filesystem'),
     },
     '/inventory': {
@@ -57,7 +66,7 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
     },
     '/configuration': {
       // label: 'Add New Repo',
-      title: 'Configuration',
+      title: 'Settings',
       // onClick: async () => navigate('/filesystem'),
     },
 
@@ -182,7 +191,7 @@ const {
   return (
     <div>
       {/* Header */}
-      <nav className="x-10 fixed top-0 z-20 w-full rounded-tl-3xl text-white bg-primary px-4 py-3 sm:pl-40">
+      <nav className="x-10 fixed top-0 z-50 w-full text-white bg-primary px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex">
             <div className="flex items-center">
@@ -193,7 +202,7 @@ const {
                 <FiMenu />
               </button>
             </div>
-            <div className="flex items-center justify-center sm:ml-10">
+            <div className="flex items-center justify-center ">
               {isNested && (
                 <button
                   onClick={async () => navigate(-1)}
@@ -202,8 +211,14 @@ const {
                   <TbArrowLeft />
                 </button>
               )}
+<svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="26" height="26" rx="5" fill="white"/>
+<rect x="6.5" y="2.78571" width="7.42857" height="19.5" rx="3.71429" fill="#4554E3" fill-opacity="0.5"/>
+<rect x="21.3572" y="14.8571" width="7.42857" height="14.8571" rx="3.71429" transform="rotate(90 21.3572 14.8571)" fill="#4554E3" fill-opacity="0.5"/>
+</svg>
+              {/* <h2 className="text-2xl font-bold ml-3">{headerButton?.title}</h2> */}
+              <h2 className="text-2xl font-bold  ml-3">Lint AI</h2>
 
-              <h2 className="text-2xl font-bold ml-6">{headerButton?.title}</h2>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -224,7 +239,9 @@ const {
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-0 left-0 z-50 h-full w-50 bg-gray-100 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed top-0 left-0
+          shadow-md
+          z-20 h-full w-50 bg-gray-100 transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } sm:translate-x-0 md:translate-x-0`}
       >
         <div className="flex h-full flex-col justify-between p-4">
@@ -242,32 +259,32 @@ const {
             >
   <li>
                 <button
-                  onClick={async () => navigate('/')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/')
+                  onClick={async () => navigate('/home')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/home')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}
                 >
-                  <TbLayoutDashboard
+                  <TbHome2
                     size={24}
                     className="mr-2"
                   />
-                  Dashboard
+                 Home
                 </button>
               </li>
               <li>
                 <button
-                  onClick={async () => navigate('/scan')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/scan')
+                  onClick={async () => navigate('/findings')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/findings')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}
                 >
-                  <TbLayoutDashboard
+                  <TbStack
                     size={24}
                     className="mr-2"
                   />
-                  Scan
+                  Findings
                 </button>
               </li>
               <li>
@@ -278,14 +295,14 @@ const {
                       : 'bg-primary text-white'
                     }`}
                 >
-                  <TbBox size={24} className="mr-2" />
-                  Scan with AI
+                  <TbTerminal2 size={24} className="mr-2" />
+                  Inventory
                 </button>
               </li>
               <li>
                 <button
-                  onClick={async () => navigate('/configuration')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/configuration')
+                  onClick={async () => navigate('/settings')}
+                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/settings')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}

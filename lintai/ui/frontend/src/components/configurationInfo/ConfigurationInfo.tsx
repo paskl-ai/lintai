@@ -1,61 +1,74 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useAppSelector } from '../../redux/services/store';
+/* ------------------------------------------------------------------
+ * ConfigurationInfo.tsx
+ * Shows the current config slice in a modal dialog.
+ * ----------------------------------------------------------------*/
+import React, { useState } from 'react'
+import { FiMaximize2, FiX } from 'react-icons/fi'
+import { useNavigate } from 'react-router'
+import { useAppSelector } from '../../redux/services/store'
 
-export default function ConfigurationInfo() {
-  const navigate = useNavigate();
-  const configValues = useAppSelector((state) => state.config);
-  const [isOpen, setIsOpen] = useState(false);
+const ConfigurationInfo = () => {
+  const navigate = useNavigate()
+  const configValues = useAppSelector((state) => state.config)
+  const [isOpen, setIsOpen] = useState(false)
 
-  const toggleOpen = () => setIsOpen((prev) => !prev);
-  const handleNavigateToConfig = () => navigate('/configuration');
+  const openModal  = () => setIsOpen(true)
+  const closeModal = () => setIsOpen(false)
+  const goToConfig = () => {
+    closeModal()
+    navigate('/settings')
+  }
 
   return (
-    // Make this container relative so the absolute dropdown is positioned correctly
-    <div className="w-full max-w-md mx-auto  bg-white border border-gray-200 relative z-50">
-      {/* HEADER */}
+    <>
+      {/* trigger button */}
       <button
-        onClick={toggleOpen}
-        className="w-full flex  justify-between items-center px-4 py-2 focus:outline-none"
-        aria-expanded={isOpen}
+        onClick={openModal}
+        className="flex items-center gap-1 rounded border px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
       >
-        <span className="text-md font-medium text-gray-800">Configuration</span>
-        <svg
-          className={` w-5 text-gray-600 transform transition-transform duration-200 ${
-            isOpen ? 'rotate-180' : 'rotate-0'
-          }`}
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <FiMaximize2 size={14} />
+        Configuration
       </button>
 
-      {/* COLLAPSIBLE CONTENT (absolute, so it won’t push parent height) */}
+      {/* modal */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 w-full bg-white  border-gray-200 shadow-md rounded-b-lg">
-          {/* JSON container */}
-          <div className="max-h-60 overflow-auto bg-gray-50 p-2 rounded-t-lg">
-            {/* 
-              - whitespace-pre preserves formatting 
-              - overflow-x-auto lets it scroll sideways if needed
-            */}
-            <pre className="whitespace-pre text-sm text-gray-700 overflow-x-auto">
-              {JSON.stringify(configValues, null, 2)}
-            </pre>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-6">
+          <div className="relative w-full max-w-lg rounded-lg bg-white shadow-lg">
+            {/* header */}
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-lg font-semibold">Configuration</h2>
+              <button onClick={closeModal} className="text-gray-500 hover:text-gray-800">
+                <FiX size={20} />
+              </button>
+            </div>
 
-          {/* “Go to Configuration” button */}
-          <button
-            onClick={handleNavigateToConfig}
-            className="w-full px-3 py-2 bg-blue-600 text-white text-center rounded-b-lg hover:bg-blue-700 transition-colors"
-          >
-            Go to Configuration
-          </button>
+            {/* JSON block */}
+            <div className="max-h-[60vh] overflow-auto p-4">
+              <pre className="rounded-md border bg-gray-50 p-4 text-sm leading-relaxed text-gray-800">
+                {JSON.stringify(configValues, null, 2)}
+              </pre>
+            </div>
+
+            {/* footer */}
+            <div className="flex justify-end gap-2 border-t p-4">
+              <button
+                onClick={goToConfig}
+                className="rounded border border-primary px-4 py-2 text-primary hover:bg-primary hover:text-white"
+              >
+                Edit
+              </button>
+              <button
+                onClick={closeModal}
+                className="rounded border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
-  );
+    </>
+  )
 }
+
+export default ConfigurationInfo

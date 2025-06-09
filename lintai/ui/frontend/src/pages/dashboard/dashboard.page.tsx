@@ -292,12 +292,12 @@ const Dashboard = () => {
             {/* card 1 */}
             <div className="bg-card_bgLight rounded-lg border p-4">
               <h3 className="text-sm font-medium text-neutral-950">
-                Total Scans
+                Total Files Scanned
               </h3>
               {false ? (
-                <Skeleton className="mt-4 h-8 w-full text-xl font-bold text-gray-900" />
+                <Skeleton className="mt-4 h-8 w-full text-xl font-bold text-primary" />
               ) : (
-                <p className="mt-4 text-xl font-bold text-gray-900">
+                <p className="mt-4 text-xl font-bold text-primary">
                   {20}
                 </p>
               )}
@@ -308,13 +308,13 @@ const Dashboard = () => {
             {/* card 2 */}
             <div className="bg-card_bgLight rounded-lg border p-4">
               <h3 className="text-sm font-medium text-neutral-950">
-                Used Amount
+              Findings with OWASP
               </h3>
               {false ? (
-                <Skeleton className="mt-4 h-8 w-full text-xl font-bold text-gray-900" />
+                <Skeleton className="mt-4 h-8 w-full text-xl font-bold text-primary" />
               ) : (
-                <p className="mt-4 text-xl font-bold text-gray-900">
-                  200$
+                <p className="mt-4 text-xl font-bold text-primary">
+                  12
                 </p>
               )}
               {/* <button className="bg-primaryContainer text-primaryBgText mt-4 flex items-center gap-2 rounded-md px-3 py-1 text-sm font-bold shadow-sm hover:bg-gray-300">
@@ -324,10 +324,10 @@ const Dashboard = () => {
             {/* card 3 */}
             <div className="bg-card_bgLight rounded-lg border p-4">
               <h3 className="text-sm font-medium text-neutral-950">
-                Total Budget
+              Findings with Mitre
               </h3>
-              <p className="mt-4 text-xl font-bold text-gray-900">$1,840</p>
-              <p className="mt-4 text-sm text-neutral-600">15% under budget</p>
+              <p className="mt-4 text-xl font-bold text-primary">6</p>
+              {/* <p className="mt-4 text-sm text-neutral-600">15% under budget</p> */}
             </div>
           </div>
 

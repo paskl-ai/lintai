@@ -76,7 +76,7 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
 
   return (
     <>
-      <div className="fixed inset-0 bg-primary/70  flex justify-center items-center z-50">
+      <div className="fixed inset-0 bg-primaryBg/70  flex justify-center items-center z-50">
         <div className="bg-white w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
           <div className="flex justify-between items-center p-4 border-b">
          

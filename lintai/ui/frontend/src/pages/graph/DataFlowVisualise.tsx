@@ -14,8 +14,8 @@ const DataFlowVisualise: React.FC<DataFlowVisualiseProps> = ({ records }) => {
   const location = useLocation();
 //   const { state } = location as { state: { record: any } };
   const { record } = location.state || {};
-  const nodes: any[] = record?.nodes || records?.elements.nodes||[];
-  const edges: any[] = record?.edges ||records?.elements.edges|| [];
+  const nodes: any[] = record?.nodes || records?.elements?.nodes||[];
+  const edges: any[] = record?.edges ||records?.elements?.edges|| [];
 console.log(records, 'Nodes and Edges');
   // Derive unique entity types directly from node data
   const entityTypes = useMemo(() => {

@@ -13,12 +13,12 @@ const PublicRouter = () => {
   return (
     <Routes>
       <Route path="" element={<DefaultLayout />}>
-      <Route path="/" element={<Dashboard />} />
+      <Route path="/home" element={<Dashboard />} />
 
-        <Route path="/scan" element={<Scan />} />
+        <Route path="/findings" element={<Scan />} />
         <Route path="/data-flow" element={<DataFlowVisualise />} />
         <Route path="/inventory" element={<Inventory />} />
-        <Route path="/configuration" element={<ConfigurationPage />} />
+        <Route path="/settings" element={<ConfigurationPage />} />
 
       </Route>
       <Route path="/*" element={<NotFound />} />

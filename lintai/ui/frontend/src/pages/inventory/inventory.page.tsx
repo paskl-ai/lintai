@@ -1,365 +1,333 @@
-import React, { useState } from 'react'
-import { FiChevronDown, FiChevronRight, FiSearch, FiSettings, FiFilter, FiFolder } from 'react-icons/fi'
-import { scanInventoryDTO, ScanService, startScanDTO } from '../../api/services/Scan/scan.api'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-toastify'
-import { useAppDispatch, useAppSelector } from '../../redux/services/store'
-import { resetJob, startJob } from '../../redux/services/ServerStatus/server.status.slice'
-import { QueryKey } from '../../api/QueryKey'
-import CommonButton from '../../components/buttons/CommonButton'
-import EntityFilter from '../../components/filters/EntityFilter'
-import { TbChartInfographic, TbGraph, TbNetwork } from 'react-icons/tb'
-import { useNavigate } from 'react-router'
-import FileSystemPage from '../filesystem/filesystem.page'
-import CytoscapeGraph from '../../components/cytoscapegraph/CytoscapeGraph'
-import DataFlowVisualise from '../graph/DataFlowVisualise'; // Import the DataFlowVisualise component
-import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
+/* ---------------------------------------------------------------------
+ *  Inventory.page.tsx
+ *  Re‑built with the shared <Table /> component so the inventory view
+ *  matches your server‑list & new Scan table UI.
+ * ------------------------------------------------------------------- */
 
-interface Finding {
-    owasp_id: string
-    severity: 'blocker' | 'high' | 'medium' | 'low'
-    message: string
-    location: string
-    line: number
-    fix: string
+import React, { useState } from 'react'
+import {
+  FiSearch,
+  FiFolder,
+} from 'react-icons/fi'
+import { TbGraph } from 'react-icons/tb'
+import { useNavigate } from 'react-router'
+import { toast } from 'react-toastify'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ColumnDef, Row } from '@tanstack/react-table'
+
+import {
+  scanInventoryDTO,
+  ScanService,
+} from '../../api/services/Scan/scan.api'
+import CommonButton from '../../components/buttons/CommonButton'
+import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
+import FileSystemPage from '../filesystem/filesystem.page'
+import Table from '../../components/table/Table'
+import DataFlowVisualise from '../graph/DataFlowVisualise'
+
+import { QueryKey } from '../../api/QueryKey'
+import {
+  resetJob,
+  startJob,
+} from '../../redux/services/ServerStatus/server.status.slice'
+import { useAppDispatch, useAppSelector } from '../../redux/services/store'
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
+
+interface InventoryRecord {
+  sink: string             // e.g. “Postgres DB”
+  at: string               // “examples/db.py:42”
+  elements: any            // payload for graph visualiser
 }
 
 interface LLMUsage {
-    tokens_used: number
-    usd_used: number
-    requests: number
-    limits: {
-        tokens: number
-        usd: number
-        requests: number
-    }
+  tokens_used: number
+  usd_used: number
+  requests: number
 }
-const entityTypes = [
-    { label: 'Code Module', value: 'CodeModule' },
-    { label: 'LLM Call', value: 'LLMCall' },
-    { label: 'LLM Model', value: 'LLMModel' },
-    { label: 'Tool', value: 'Tool' },
-    { label: 'API', value: 'API' },
-    { label: 'Database', value: 'Database' },
-    { label: 'Vector DB', value: 'VectorDB' },
-    { label: 'File Access', value: 'File' },
-    { label: 'Prompt', value: 'Prompt' },
-];
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                         */
+/* ------------------------------------------------------------------ */
 
 const Inventory = () => {
-    const navigate = useNavigate()
+  const navigate = useNavigate()
+  const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
 
-    const [expandedFiles, setExpandedFiles] = useState<string[]>([])
-    const [severityFilter, setSeverityFilter] = useState<string[]>([])
-    const [entityFilter, setEntityFilter] = useState<string[]>([]);
-    const handleEntityFilterChange = (value: string) => {
-        setEntityFilter((prev) =>
-            prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value]
-        );
-    };
+  /* ------------------------------ Local state -------------------- */
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isFileSystemModalOpen, setIsFileSystemModalOpen] =
+    useState<boolean>(false)
+  const [networkRecord, setNetworkRecord] = useState<InventoryRecord | null>(
+    null,
+  )
+  const [isNetworkModalOpen, setIsNetworkModalOpen] =
+    useState<boolean>(false)
 
-    const clearEntityFilters = () => {
-        setEntityFilter([]);
-    };
-    const [searchQuery, setSearchQuery] = useState('')
-    const [sortOrder, setSortOrder] = useState('a-z')
-    const dispatch = useAppDispatch()
-    const [scanPath, setScanPath] = useState<string>('');
-    const { jobId: runId, isProcessing } = useAppSelector(state => state.serverStatus)
-    const queryClient = useQueryClient()
-    const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState<boolean>(false)
-    const [fileSearchQuery, setFileSearchQuery] = useState<string>('')
-    const [selectedScan, setSelectedScan] = useState<any>(null);
-    const [isNetworkModalOpen, setIsNetworkModalOpen] = useState<boolean>(false);
-    const [networkRecord, setNetworkRecord] = useState<any>(null);
+  /* ------------------------------ Global state ------------------- */
+  const { jobId: runId, isProcessing } = useAppSelector(
+    (state) => state.serverStatus,
+  )
+  const configValues = useAppSelector((state) => state.config)
 
-    const [logLevel, setLogLevel] = useState<string>('info');
-    const [scanDepth, setScanDepth] = useState<number>(1);
+  /* ------------------------------ Mutation ----------------------- */
+  const { mutate: startScanInventory } = useMutation({
+    mutationFn: async (body: scanInventoryDTO) =>
+      await ScanService.scanInventory(body),
+    onSuccess: (res, data) => {
+      toast.loading(
+        `Scanning path: ${
+          (data as scanInventoryDTO)?.path || configValues?.config?.sourcePath
+        }`,
+      )
 
-    const logLevels = ['debug', 'info', 'warn', 'error'];
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: [QueryKey.JOB + 'inventory'] })
+      }, 2_000)
 
-    const handleFileSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value)
-    }
+      if (res?.run_id) {
+        dispatch(
+          startJob({
+            jobId: res.run_id as any,
+            jobStatus: 'Starting',
+          }),
+        )
+      } else {
+        dispatch(resetJob())
+      }
+    },
+    onError: (err: any) =>
+      toast.error(err.message || 'Failed to start inventory scan.'),
+  })
 
-    const configValues = useAppSelector((state) => state.config); // Access config slice
+  /* ------------------------------ Queries ------------------------ */
+  const {
+    data: scans,
+    isFetching: isFetchingScan,
+    error: scanError,
+  } = useQuery({
+    queryKey: [QueryKey.JOB + 'inventory'],
+    queryFn: async () => {
+      const res = await ScanService.getResults(runId!)
+      if (res?.data) {
+        dispatch(resetJob())
+        toast.dismiss()
+      }
+      return res
+    },
+    initialData: [],
+    refetchOnWindowFocus: false,
+    refetchInterval: isProcessing ? 3_000 : false,
+    enabled: !!runId,
+  })
 
-    const handleNavigateToConfig = () => {
-        navigate('/configuration'); // Adjust route as needed
-    };
+  const {
+    data: lastscan,
+    isFetching: isFetchingLastScan,
+    error: lastScanError,
+  } = useQuery({
+    queryKey: [QueryKey.JOB + 'last'],
+    queryFn: async () => (await ScanService.getLastResults()).report,
+    initialData: [],
+    refetchOnWindowFocus: false,
+    enabled: !scans?.data?.records,
+  })
 
-    const handleScanSelection = (record: any) => {
-        handleNetworkView(record?.elements || null)
-        // setSelectedScan(record?.elements || null);
-    };
+  /* ------------------------------ Derived data ------------------- */
+  const llmUsage: LLMUsage | undefined =
+    scans?.llm_usage || lastscan?.llm_usage
 
-    // 1️⃣ Mutation to start a scan
-    const { mutate: startScanInventory, isPending: isPendingStartInventoryServer } = useMutation({
-        mutationFn: async (body: scanInventoryDTO) => {
-            const res = await ScanService.scanInventory(body)
-            return res
-        },
-        onSuccess: (res, data) => {
-            // toast.success('Inventory scan starting!')
-            toast.loading(`Scanning path: ${data?.path || configValues?.config?.sourcePath}`)
+  const records: InventoryRecord[] =
+    scans?.data?.records ||
+    lastscan?.data?.records ||
+    []
 
-            setTimeout(() => {
-                queryClient.invalidateQueries({ queryKey: [QueryKey.JOB] })
-            }, 2000)
+  const tableData: InventoryRecord[] = records.filter((rec) =>
+    `${rec.sink} ${rec.at}`.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
 
-            console.log(res, 'response after job started')
-            if (res?.run_id) {
-                dispatch(
-                    startJob({
-                        jobId: res?.run_id as any,
-                        jobStatus: 'Starting',
-                    }),
-                )
-            } else {
-                toast.dismiss()
-                dispatch(resetJob())
-            }
-        },
-        onError: (error: any) => {
-            toast.error(error.message || 'Failed to create server.')
-        },
-    })
-
-    console.log(runId)
-    const {
-        data: scans,
-        isFetching: isFetchingScan,
-    } = useQuery({
-        queryKey: [QueryKey.JOB + 'inventory'],
-        queryFn: async () => {
-            const res = await ScanService.getResults(runId!!)
-
-            if (res?.data) {
-                dispatch(resetJob())
-                toast.dismiss()
-
-            }
-
-            return res
-        },
-        initialData: [],
-        refetchOnMount: true,
-        refetchOnWindowFocus: false,
-        refetchInterval: isProcessing ? 3000 : false,
-        enabled: !!runId,
-    })
-
-    const {
-        data: lastscan,
-        isFetching: isFetchingLastScan,
-    } = useQuery({
-        queryKey: [QueryKey.JOB + 'last'],
-        queryFn: async () => {
-            const res = await ScanService.getLastResults()
-
-
-
-            return res?.report
-        },
-        initialData: [],
-        refetchOnMount: true,
-        refetchOnWindowFocus: false,
-        refetchInterval: isProcessing ? 3000 : false,
-        enabled: !!(!scans?.data?.records)
-    })
-    // Derived state from query
-    console.log(scans, 'inventory scans data')
-    const llmUsage = scans?.llm_usage || lastscan?.llm_usage;
-    const inventoryRecords = scans?.data?.records || lastscan?.data?.records || [];
-
-    // Filter inventory records based on the search query
-    const filteredInventoryRecords = inventoryRecords.filter((record: any) => {
-        const searchLower = searchQuery.toLowerCase()
+  if(lastScanError||scanError) {
+      dispatch(resetJob())
+      toast.dismiss() 
+  }
+  /* ------------------------------ Column defs -------------------- */
+  const columns: ColumnDef<InventoryRecord>[] = [
+    { accessorKey: 'sink', header: 'Sink' },
+    {
+      accessorKey: 'at',
+      header: 'Location',
+      cell: ({ getValue }) => {
+        const loc = getValue<string>() // examples/foo.py:12
+        const [file, line] = loc.split(':')
         return (
-            record.sink.toLowerCase().includes(searchLower) ||
-            record.at.toLowerCase().includes(searchLower)
+          <span className="text-sm">
+            <span className="text-red-700">{file}</span>
+            <span className="text-blue-700">:</span>
+            <span className="text-green-700 font-semibold">{line}</span>
+          </span>
         )
+      },
+    },
+    {
+      header: 'Actions',
+      cell: ({ row }) => {
+        const rec = row.original
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-md border border-blue-500 px-3 py-1 text-xs text-blue-500 hover:bg-blue-500 hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation()
+                setNetworkRecord(rec)
+                setIsNetworkModalOpen(true)
+              }}
+            >
+              View <TbGraph className="ml-1 inline" />
+            </button>
+            <a
+              href={`vscode://file/${rec.at}`}
+              className="rounded-md border border-green-500 px-3 py-1 text-xs text-green-500 hover:bg-green-500 hover:text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Edit
+            </a>
+          </div>
+        )
+      },
+    },
+  ]
+
+  /* ------------------------------ Helpers ------------------------ */
+  const handleFolderSelection = (path: string) => {
+    startScanInventory({
+      path,
+      logLevel: 'info',
+      depth: 1,
     })
+  }
 
-    const handleFolderSelection = (path: string) => {
-        startScanInventory({
-            path: path,
-            logLevel: logLevel,
-            depth: scanDepth,
-        })
+  const closeNetworkModal = () => {
+    setIsNetworkModalOpen(false)
+    setNetworkRecord(null)
+  }
 
-    }
+  const handleRowClick = (row: Row<InventoryRecord>) => {
+    setNetworkRecord(row.original)
+    setIsNetworkModalOpen(true)
+  }
 
-    const toggleExpand = (filePath: string) => {
-        setExpandedFiles((prev) =>
-            prev.includes(filePath) ? prev.filter((path) => path !== filePath) : [...prev, filePath]
-        )
-    }
+  /* ----------------------------------------------------------------
+   *  Render
+   * -------------------------------------------------------------- */
 
-    const getSeverityChip = (label: string, count: number, color: string) => (
-        <span className={`border ${color} text-${color} px-2 py-1 rounded-sm text-sm font-bold`}>
-            {label} {count}
-        </span>
-    )
+  return (
+    <div className="flex p-6 sm:ml-50">
+      <main className="flex-1">
+        {/* Top bar */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <h3 className="text-lg font-bold text-gray-700">Scan Inventory</h3>
 
-    const handleNetworkView = (record: any) => {
-        setNetworkRecord(record);
-        setIsNetworkModalOpen(true);
-    };
+          <div className="flex items-center gap-2">
+            <ConfigurationInfo />
+{/* 
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search…"
+                className="w-64 rounded border py-2 pl-10 pr-4"
+              />
+            </div> */}
 
-    const closeNetworkModal = () => {
-        setIsNetworkModalOpen(false);
-        setNetworkRecord(null);
-    };
-
-    console.log(networkRecord, 'network record')
-
-    return (
-        <div className="p-6 flex sm:ml-50">
-
-            {/* Main Content */}
-            <main className="flex-1 ">
-                {/* Top Bar */}
-                <div className="flex flex-row items-center justify-between mb-6">
-                        <div>
-                            <h3 className="font-bold  text-gray-700">Scan Inventory</h3>
-
-                        </div>
-                        <div className="flex items-center gap-2">
-                        {/* Configuration Section */}
-                <ConfigurationInfo/>
-                            <div className="relative">
-                                <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
-                                <input
-                                    type="text"
-                                    placeholder="Search files..."
-                                    className="pl-10 pr-4 py-2 border rounded w-64"
-                                    value={searchQuery}
-                                    onChange={handleFileSearchChange}
-                                />
-                            </div>
-
-                            <CommonButton
-                                className=" bg-primary text-white px-4 py-2 rounded flex w-full items-center"
-                                onClick={() => setIsFileSystemModalOpen(true)}
-                                loading={isProcessing}
-                            >
-                                <FiFolder className="mr-2" />
-                                Run scan
-                            </CommonButton>
-                        </div>
-                    </div>
-             
-
-                {/* File System Modal */}
-                {isFileSystemModalOpen && (
-                    <div className="fixed inset-0  flex justify-center items-center z-50">
-                        <div className=" w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
-
-                            <div className="flex-1 overflow-y-auto p-4">
-                                <FileSystemPage startLocation={configValues?.config?.sourcePath} setIsModalOpen={setIsFileSystemModalOpen} handleScan={handleFolderSelection} />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* LLM Usage Summary */}
-                {llmUsage && (
-                    <div className="grid h-fit grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        <div className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4">
-                            <h3 className="text-lg font-semibold text-gray-800">Tokens used</h3>
-                            <p className="mt-2 text-3xl font-bold text-gray-900">
-                                {llmUsage.tokens_used}
-                            </p>
-                        </div>
-                        <div className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4">
-                            <h3 className="text-lg font-semibold text-gray-800">Total Cost</h3>
-                            <p className="mt-2 text-3xl font-bold text-gray-900">${llmUsage.usd_used.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-card_bgLight rounded-lg border-2 border-neutral-100 p-4">
-                            <h3 className="text-lg font-semibold text-gray-800">LLM Requests</h3>
-                            <p className="mt-2 text-3xl font-bold text-gray-900">{llmUsage.requests}</p>
-                        </div>
-                    </div>
-                )}
-
-             
-
-                {/* Inventory Records List */}
-                <div>
-                    {filteredInventoryRecords.map((record: any, index: number) => (
-                        <div key={index} className={`border-b py-4 px-1 ${networkRecord?.at === record?.at ? 'bg-amber-200' : ''}`}>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-4">
-                                    <span className="font-bold">{record.sink}</span>
-                                    <span className="text-sm">
-                                        <span className="text-red-800">{record.at.split(':')[0]}</span>
-                                        <span className="text-blue-800">:</span>
-                                        <span className="text-green-600 font-bold" >{record.at.split(':')[1]}</span>
-                                    </span>
-                                </div>
-                                <div className="flex space-x-4">
-                                    <button
-                                        className="border-1 border-blue-500 hover:bg-blue-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
-                                        onClick={() => handleNetworkView(record)}
-                                    >
-                                        <p>View</p>
-                                        <TbGraph />
-                                    </button>
-                                    <a
-                                        href={`vscode://file/${record.at}`}
-                                        className="border-1 border-green-500 hover:bg-green-500  px-4 py-2 rounded-md  transition duration-200 flex items-center"
-                                    >
-                                        Edit
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                {filteredInventoryRecords.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                        <FiFolder size={48} className="mb-4" />
-                        <p className="text-lg font-semibold">No matching inventory records found</p>
-                        <p className="text-sm mt-2">Try adjusting your search query.</p>
-                    </div>
-                )}
-
-                {/* Network Visualization Modal */}
-                {isNetworkModalOpen && (
-                    <div
-
-                        className="fixed inset-0  bg-opacity-0 flex justify-end items-center z-50   transition duration-300 ease-in-out slide-in-from-right">
-                        <div className="bg-white w-2/4 h-full shadow-lg overflow-hidden flex flex-col">
-                            <div className="flex justify-between items-center p-4 border-b">
-                                <h2 className="text-lg font-semibold">Data Flow Visualization</h2>
-                                <button
-                                    className="bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded flex items-center"
-                                    onClick={closeNetworkModal}
-                                >
-                                    Close
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto">
-                                {networkRecord && <DataFlowVisualise records={networkRecord} />}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Visualization Section */}
-                {selectedScan && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-semibold mb-4">Data Flow Visualization</h2>
-                        <CytoscapeGraph
-                            nodes={selectedScan.nodes}
-                            edges={selectedScan.edges}
-                        />
-                    </div>
-                )}
-            </main>
+            <CommonButton
+              loading={isProcessing}
+              onClick={() => setIsFileSystemModalOpen(true)}
+              className="flex items-center bg-primary px-4 py-2 text-white"
+            >
+              <FiFolder className="mr-2" />
+              Run scan
+            </CommonButton>
+          </div>
         </div>
-    )
+
+        {/* File‑system picker modal */}
+        {isFileSystemModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="h-3/4 w-3/4 overflow-hidden rounded-lg bg-white shadow-lg">
+              <FileSystemPage
+                startLocation={configValues?.config?.sourcePath}
+                setIsModalOpen={setIsFileSystemModalOpen}
+                handleScan={handleFolderSelection}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* LLM stats */}
+        {llmUsage && (
+          <div className="mb-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <StatCard label="Tokens used" value={llmUsage.tokens_used} />
+            <StatCard
+              label="Total Cost"
+              value={`$${llmUsage.usd_used.toFixed(2)}`}
+            />
+            <StatCard label="LLM Requests" value={llmUsage.requests} />
+          </div>
+        )}
+
+        {/* Inventory table */}
+        <Table
+        //   loading={isFetchingScan || isFetchingLastScan}
+          data={tableData}
+          columns={columns}
+          
+        //   handleRowClick={handleRowClick}
+        //   pageSize={10}
+        //   enableSorting
+        />
+
+        {/* Graph modal */}
+        {isNetworkModalOpen && networkRecord && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="h-full w-2/4 bg-white shadow-lg">
+              <div className="flex items-center justify-between border-b p-4">
+                <h2 className="text-lg font-semibold">
+                  Data Flow Visualisation
+                </h2>
+                <button
+                  onClick={closeNetworkModal}
+                  className="rounded bg-primary px-4 py-2 text-white hover:bg-primary/80"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="h-full overflow-y-auto p-4">
+                <DataFlowVisualise records={networkRecord} />
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  )
 }
+
+/* ------------------------------ Helper --------------------------- */
+const StatCard = ({
+  label,
+  value,
+}: {
+  label: string
+  value: number | string
+}) => (
+  <div className="rounded-lg border-2 border-neutral-100 bg-card_bgLight p-4">
+    <h3 className="text-lg font-semibold text-gray-800">{label}</h3>
+    <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
+  </div>
+)
 
 export default Inventory
