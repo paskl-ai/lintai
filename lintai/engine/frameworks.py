@@ -6,11 +6,17 @@ FRAMEWORK_SIGNATURES = {
         "classes": ["ChatOpenAI", "PromptTemplate", "Tool", "AgentExecutor"],
     },
     "AutoGen": {
-        "imports": ["autogen"],
-        "classes": ["Agent", "GroupChat", "AssistantAgent"],
+        "imports": ["autogen", "autogen_agentchat", "autogen_ext"],
+        "classes": ["Agent", "AssistantAgent", "UserProxyAgent", "GroupChat", "RoundRobinGroupChat", "MultimodalWebSurfer"]
     },
-    "CrewAI": {"imports": ["crewai"], "classes": ["Crew", "Task", "Agent"]},
-    "DSPy": {"imports": ["dspy"], "classes": ["Predict", "Module"]},
+    "CrewAI": {
+        "imports": ["crewai"],
+        "classes": ["Crew", "Task", "Agent"]
+    },
+    "DSPy": {
+        "imports": ["dspy"],
+        "classes": ["Predict", "Module"]
+    },
     "SemanticKernel": {
         "imports": ["semantic_kernel"],
         "classes": ["Kernel", "Planner"],
@@ -20,17 +26,21 @@ FRAMEWORK_SIGNATURES = {
 
 def detect_frameworks(ast_tree):
     detected = set()
-
     imports = set()
+
     for node in ast.walk(ast_tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                imports.add(alias.name.split(".")[0])
+                full = alias.name
+                top = alias.name.split('.')[0]
+                imports.add(full)
+                imports.add(top)
         elif isinstance(node, ast.ImportFrom):
             if node.module:
-                imports.add(node.module.split(".")[0])
-
-    # print("🧠 Detected imports from AST:", imports)
+                full = node.module
+                top = node.module.split('.')[0]
+                imports.add(full)
+                imports.add(top)
 
     for fw, sig in FRAMEWORK_SIGNATURES.items():
         if any(lib in imports for lib in sig["imports"]):

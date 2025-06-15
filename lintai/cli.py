@@ -17,7 +17,7 @@ import lintai.engine as _engine
 import uvicorn
 
 from lintai.engine.inventory_builder import build_inventory
-from lintai.engine.inventory_builder import classify_sink, detect_frameworks
+from lintai.engine.inventory_builder import classify_sink, detect_frameworks, extract_ast_components
 
 
 app = typer.Typer(
@@ -210,6 +210,8 @@ def ai_inventory_cmd(
             with open(file_path, "r", encoding="utf-8") as f:
                 tree = ast.parse(f.read())
             frameworks = detect_frameworks(tree)
+            additional = extract_ast_components(tree, file_path)
+            components.extend(additional)
         except Exception as e:
             print(f"❌ Error parsing AST for {file_path}: {e}")
             frameworks = []
