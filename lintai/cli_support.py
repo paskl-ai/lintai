@@ -97,12 +97,37 @@ def maybe_load_env(env_path: Path | None) -> None:
 
 
 def build_ast_units(path: Path, ignore_spec: pathspec.PathSpec) -> List[PythonASTUnit]:
+    """
+    Finds all python files, creates a shared project_root for them, and
+    builds a PythonASTUnit for each one.
+    """
     units: list[PythonASTUnit] = []
-    for fp in iter_python_files(path, ignore_spec):
+    
+    # --- NEW: Collect all file paths into a list first ---
+    python_files = list(iter_python_files(path, ignore_spec))
+
+    if not python_files:
+        return []
+
+    # --- NEW: Determine a common root path for clean module names ---
+    # This ensures that module names are relative and clean, not long absolute paths.
+    if len(python_files) == 1:
+        project_root = python_files[0].parent
+    else:
+        project_root = Path(os.path.commonpath([str(p) for p in python_files]))
+
+    # --- MODIFIED: Loop through the collected files ---
+    for fp in python_files:
         try:
-            units.append(PythonASTUnit(fp, fp.read_text(encoding="utf-8")))
+            # Pass the calculated project_root to the constructor
+            units.append(
+                PythonASTUnit(fp, fp.read_text(encoding="utf-8"), project_root=project_root)
+            )
         except UnicodeDecodeError:
             logger.warning("Skipping non-utf8 file %s", fp)
+        except Exception as e:
+            logger.error("Failed to parse %s: %s", fp, e)
+            
     return units
 
 

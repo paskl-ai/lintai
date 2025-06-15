@@ -16,8 +16,8 @@ from lintai.core import report
 import lintai.engine as _engine
 import uvicorn
 
-from lintai.engine.inventory_builder import build_inventory
-from lintai.engine.inventory_builder import classify_sink, detect_frameworks, extract_ast_components
+from lintai.engine.analysis import ProjectAnalyzer
+from lintai.models.inventory import FileInventory 
 
 
 app = typer.Typer(
@@ -113,40 +113,62 @@ def scan_cmd(
     raise typer.Exit(1 if any(f.severity == "blocker" for f in findings) else 0)
 
 
+def create_graph_payload(inventories: List[FileInventory]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Converts the inventories into a Cytoscape.js-compatible graph format.
+    """
+    nodes = []
+    edges = []
+    seen_nodes = set()
+
+    for inventory in inventories:
+        for comp in inventory.components:
+            node_id = f"{comp.location}" # Use location for a unique ID
+            if node_id not in seen_nodes:
+                nodes.append({
+                    "data": {
+                        "id": node_id,
+                        "label": comp.name,
+                        "type": comp.component_type,
+                        "file": inventory.file_path
+                    }
+                })
+                seen_nodes.add(node_id)
+            
+            # Add edges from the relationships
+            if "uses" in comp.relationships:
+                for target_name in comp.relationships["uses"]:
+                    # This requires a lookup to find the target's location/ID
+                    # This logic can be enhanced later for cross-file resolution
+                    edges.append({
+                        "data": {
+                            "source": node_id,
+                            "target": target_name, # Simplified for now
+                            "label": "uses"
+                        }
+                    })
+    return {"nodes": nodes, "edges": edges}
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # ai-inventory  ----------------------------------------------------------------
 # ──────────────────────────────────────────────────────────────────────────────
-@app.command(
-    "ai-inventory",
-    help="Emit a JSON list with every *direct* AI sink and its wrappers/"
-    "callers up to the requested depth.",
-)
+@app.command("ai-inventory", help="Emit a unified JSON inventory of all AI components.")
 def ai_inventory_cmd(
     ctx: Context,
-    path: Path = Argument(
-        ..., exists=True, readable=True, help="File or directory to analyse"
-    ),
-    ruleset: Path | None = Option(
-        None, "--ruleset", "-r", help="Custom rule file/folder"
-    ),
-    env_file: Path | None = Option(None, "--env-file", "-e", help="Optional .env"),
+    path: Path = Argument(..., exists=True, readable=True, help="File or directory to analyse"),
+    ruleset: Path = Option(None, "--ruleset", "-r", help="Custom rule file/folder"),
+    env_file: Path = Option(None, "--env-file", "-e", help="Optional .env"),
     log_level: str = Option("INFO", "--log-level", "-l", help="Logging level"),
-    ai_call_depth: int = Option(
-        2,
-        "--ai-call-depth",
-        "-d",
-        help="How many caller layers to mark as AI-related (default 2)",
-    ),
-    output: Path = Option(
-        None, "--output", "-o", help="Write JSON output to file (default: stdout)"
-    ),
-    graph: bool = Option(
-        False, "--graph", "-g", help="Include full call-graph payload"
-    ),
-    group_by: str = Option(
-        None, "--group-by", help="Group AI inventory by attribute (e.g. 'file')"
-    ),
+    ai_call_depth: int = Option(2, "--ai-call-depth", "-d", help="How many caller layers to trace for relationships"),
+    output: Path = Option(None, "--output", "-o", help="Write JSON output to file (default: stdout)"),
+    graph: bool = Option(False, "--graph", "-g", help="Include full call-graph payload for visualization.")
 ):
+    """
+    Analyzes the codebase to produce a unified inventory of AI components,
+    optionally including a full graph representation.
+    """
+    # The bootstrap function remains the same, initializing the project units
     _bootstrap(
         ctx,
         path=path,
@@ -156,102 +178,30 @@ def ai_inventory_cmd(
         ruleset=ruleset,
     )
 
-    ana = _engine.ai_analyzer
-    if ana is None:
-        ctx.fail("AI engine not initialised – internal error")
+    units = ctx.obj["units"]
+    
+    # 1. Run our new, unified analysis engine
+    analyzer = ProjectAnalyzer(units, call_depth=ai_call_depth).analyze()
+    
+    # 2. Get the results from the .inventories attribute
+    inventory_list = [inv.model_dump() for inv in analyzer.inventories.values()]
+    
+    # 3. Prepare the final output object
+    final_output = {
+        "inventory_by_file": inventory_list
+    }
 
-    depth = ana.call_depth
-    inventory = [] if not graph else None
-    graph_records = [] if graph else None
-    components_by_file = defaultdict(list)
-
-    for sink in ana.ai_calls:
-        record = {
-            "sink": sink.fq_name,
-            "at": f"{sink.file}:{sink.lineno}",
-            "callers": [],
-        }
-
-        if not graph:
-            frontier = {
-                fn for fn, callees in ana.call_graph.items() if sink.fq_name in callees
-            }
-            seen = set()
-            lvl = 0
-            while frontier and lvl < depth:
-                record["callers"].extend(sorted(frontier))
-                seen.update(frontier)
-                frontier = {
-                    parent
-                    for parent, callees in ana.call_graph.items()
-                    if callees & frontier and parent not in seen
-                }
-                lvl += 1
-            inventory.append(record)
-
-            file_path = str(sink.file)
-            components_by_file[file_path].append(
-                {
-                    "type": classify_sink(sink.fq_name),
-                    "sink": sink.fq_name,
-                    "at": f"{sink.file}:{sink.lineno}",
-                }
-            )
-
-        else:
-            elements = ana.graph_for_sink(sink, depth)
-            graph_records.append(
-                {"sink": sink.fq_name, "at": record["at"], "elements": elements}
-            )
-
-    component_reports = []
-    for file_path, components in components_by_file.items():
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read())
-            frameworks = detect_frameworks(tree)
-            additional = extract_ast_components(tree, file_path)
-            components.extend(additional)
-        except Exception as e:
-            print(f"❌ Error parsing AST for {file_path}: {e}")
-            frameworks = []
-
-        component_reports.append(
-            {
-                "file": file_path,
-                "frameworks": frameworks,
-                "components": components,
-            }
-        )
-
+    # 4. Conditionally add the graph payload if the --graph flag is present
     if graph:
-        report.write_graph_inventory_report(graph_records, output)
-    else:
-        if group_by == "file":
-            grouped = defaultdict(
-                lambda: {"ai_calls": [], "components": [], "frameworks": []}
-            )
-            for item in inventory:
-                file = item["at"].split(":")[0]
-                grouped[file]["ai_calls"].append(item)
-            for comp in component_reports:
-                grouped[comp["file"]]["components"].extend(comp["components"])
-                grouped[comp["file"]]["frameworks"].extend(comp["frameworks"])
-
-            output_data = [{"file": k, **v} for k, v in grouped.items()]
-        else:
-            output_data = {
-                "ai_call_inventory": inventory,
-                "component_inventory": component_reports,
-            }
-
-        if output:
-            output.write_text(json.dumps(output_data, indent=2))
-        else:
-            typer.echo(json.dumps(output_data, indent=2))
-
+        graph_data = create_graph_payload(list(analyzer.inventories.values()))
+        final_output["graph"] = graph_data
+    
+    # 5. Write the final JSON to the specified output or to the console
     if output:
+        output.write_text(json.dumps(final_output, indent=2))
         typer.echo(f"\n✅ Inventory written to {output}")
+    else:
+        typer.echo(json.dumps(final_output, indent=2))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
