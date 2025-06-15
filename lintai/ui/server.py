@@ -216,11 +216,13 @@ def _kick(cmd: list[str], rid: str, bg: BackgroundTasks):
 
 
 def _report_path(rid: str, kind: RunType) -> Path:
-    return (
-        (DATA_DIR / rid / "scan_report.json")
-        if kind is RunType.scan
-        else (DATA_DIR / f"{rid}_inventory.json")
-    )
+    # Always use a subdirectory for both scan and inventory
+    subdir = DATA_DIR / rid
+    subdir.mkdir(parents=True, exist_ok=True)
+    if kind is RunType.scan:
+        return subdir / "scan_report.json"
+    else:
+        return subdir / "inventory.json"
 
 
 # ╭──────────────────────── FastAPI app ─────────────────────╮
@@ -316,7 +318,7 @@ def last_result():
     """
     runs = _runs()
     if not runs:
-        raise HTTPException(404, "No runs found")
+        return {"run": None, "report": None}
     latest_run = max(runs, key=lambda r: r.created)
     report_path = _report_path(latest_run.run_id, latest_run.type)
     report = None
@@ -334,14 +336,14 @@ def history():
     """
     runs = _runs()
     if not runs:
-        raise HTTPException(404, "No runs found")
+        return []
 
     history = []
     for run in runs:
         report_path = _report_path(run.run_id, run.type)
         report = None
         errors = None
-        files = run.get("files", [])  # Retrieve scanned files if available
+        files = None  # RunSummary does not have a 'files' attribute
         if report_path.exists():
             report = json.loads(report_path.read_text())
             errors = report.get("errors", None)  # Extract errors if present

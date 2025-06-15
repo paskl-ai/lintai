@@ -76,7 +76,9 @@ def _fake_report(rid: str, kind: str):
             "data": {"llm_usage": {}, "findings": [{"severity": "high"}]},
         }
     else:
-        fp = ui.DATA_DIR / f"{rid}_inventory.json"
+        fp = (
+            ui.DATA_DIR / rid / "inventory.json"
+        )  # Updated to match new backend structure
         data = {"type": "inventory", "data": {"nodes": [{"id": "A"}], "edges": []}}
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(json.dumps(data))

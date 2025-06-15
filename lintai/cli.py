@@ -17,7 +17,11 @@ import lintai.engine as _engine
 import uvicorn
 
 from lintai.engine.inventory_builder import build_inventory
-from lintai.engine.inventory_builder import classify_sink, detect_frameworks, extract_ast_components
+from lintai.engine.inventory_builder import (
+    classify_sink,
+    detect_frameworks,
+    extract_ast_components,
+)
 
 
 app = typer.Typer(

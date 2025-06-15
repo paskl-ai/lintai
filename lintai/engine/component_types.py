@@ -7,11 +7,9 @@ GENERIC_COMPONENTS = {
     # OpenAI SDK
     "openai.ChatCompletion.create": "LLM",
     "openai.Completion.create": "LLM",
-
     # Helpful built-ins we still want
     "eval": "DangerousExec",
     "input": "IO",
-
     # LangChain helpers
     "StrOutputParser": "Parser",
     "OpenAIEmbeddings": "Embedding",
@@ -22,7 +20,6 @@ GENERIC_COMPONENTS = {
     "InMemoryStore": "Storage",
     "MultiVectorRetriever": "Retriever",
     "partition_pdf": "DocumentParser",
-
     # Prompt variables / text
     "prompt_text": "Prompt",
 }
@@ -37,13 +34,35 @@ SINK_TYPE_MAP = {
 }
 
 NOISE_SINKS = {
-    "str", "int", "float", "len", "print", "list", "set", "type", "enumerate", "zip", "system",
-    "get_ipython", "Document", "Element", "uuid", "uuid4", "os.getenv", "keys", "append",
-    "getenv", "add_documents", "mset", "vectorstore", "docstore",
+    "str",
+    "int",
+    "float",
+    "len",
+    "print",
+    "list",
+    "set",
+    "type",
+    "enumerate",
+    "zip",
+    "system",
+    "get_ipython",
+    "Document",
+    "Element",
+    "uuid",
+    "uuid4",
+    "os.getenv",
+    "keys",
+    "append",
+    "getenv",
+    "add_documents",
+    "mset",
+    "vectorstore",
+    "docstore",
 }
 
+
 def classify_sink(sink: str) -> str:
-    base = sink.split(".")[-1]    # final identifier only
+    base = sink.split(".")[-1]  # final identifier only
 
     if base in NOISE_SINKS:
         return "Ignore"

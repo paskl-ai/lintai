@@ -2,6 +2,7 @@ import ast
 from lintai.engine.frameworks import detect_frameworks
 from lintai.engine.component_types import classify_sink, NOISE_SINKS
 
+
 def build_inventory(file_path, ai_sinks):
     """
     Build a structured inventory from both dynamic AI call graph analysis
@@ -27,8 +28,7 @@ def build_inventory(file_path, ai_sinks):
 
     # From static AST-based detection
     components.extend(
-        c for c in extract_ast_components(tree, file_path)
-        if c["type"] != "Ignore"
+        c for c in extract_ast_components(tree, file_path) if c["type"] != "Ignore"
     )
 
     return {"file": file_path, "frameworks": frameworks, "components": components}
@@ -90,4 +90,3 @@ def get_full_attr_name(attr: ast.Attribute) -> str:
     if isinstance(attr, ast.Name):
         parts.insert(0, attr.id)
     return ".".join(parts)
-
