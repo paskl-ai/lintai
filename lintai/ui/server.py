@@ -579,6 +579,29 @@ def subgraph(rid: str, node: str, depth: int = Query(1, ge=1, le=5)):
 # ─────────── static React bundle ──────────
 frontend = Path(__file__).parent / "frontend" / "dist"
 if frontend.exists():
-    app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
+    # Mount static assets first
+    app.mount("/assets", StaticFiles(directory=frontend / "assets"), name="assets")
+
+    # Serve individual static files
+    @app.get("/favicon.svg")
+    async def favicon():
+        from fastapi.responses import FileResponse
+
+        return FileResponse(frontend / "favicon.svg")
+
+    @app.get("/mockServiceWorker.js")
+    async def mock_service_worker():
+        from fastapi.responses import FileResponse
+
+        return FileResponse(frontend / "mockServiceWorker.js")
+
+    # SPA catch-all route - this MUST be defined LAST
+    @app.get("/{full_path:path}")
+    async def spa_handler(full_path: str):
+        from fastapi.responses import FileResponse
+
+        # Serve index.html for any non-API route (SPA fallback)
+        return FileResponse(frontend / "index.html")
+
 else:
     log.warning("UI disabled – React build not found at %s", frontend)
