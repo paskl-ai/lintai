@@ -187,7 +187,7 @@ const Dashboard = () => {
     data: scans,
     isFetching: isFetchingScan,
   } = useQuery({
-    queryKey: [QueryKey.JOB + 'inventory'],
+    queryKey: [QueryKey.JOB + 'scan'],
     queryFn: async () => {
       const res = await ScanService.getResults(runId!!)
 

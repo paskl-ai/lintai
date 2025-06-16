@@ -126,9 +126,9 @@ const Scan = () => {
     isFetching: isFetchingLastScan,
     error: lastScanError,
   } = useQuery({
-    queryKey: [QueryKey.JOB + 'last'],
+    queryKey: [QueryKey.JOB + 'last-scan'],
     queryFn: async () => {
-      const res = await ScanService.getLastResults()
+      const res = await ScanService.getLastResultsByType('scan')
       if (res?.data || res?.findings) {
         dispatch(resetJob())
         toast.dismiss()
