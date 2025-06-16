@@ -10,18 +10,22 @@ Endpoints
 *  POST       /api/inventory   – run ai-inventory in background
 *  GET        /api/runs        – history
 *  GET        /api/results/{id}[ /filter ]   – reports & helpers
+*  GET        /api/last-result – fetch the most recent run result
+*  GET        /api/history     – fetch the history of all scan runs
 """
 
 from __future__ import annotations
 
 import os, json, logging, subprocess, tempfile, uuid
-from datetime import datetime, UTC
+from datetime import datetime, timezone  # Replace UTC with timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import (
     FastAPI,
+    File,
+    Form,
     BackgroundTasks,
     UploadFile,
     HTTPException,
@@ -36,9 +40,17 @@ from pydantic import BaseModel, Field, field_validator
 # ─────────────────────────── logging ────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name%s: %(message)s",
 )
 log = logging.getLogger(__name__)
+
+
+def set_server_log_level(level: str) -> None:
+    """Set the log level for the server logger."""
+    numeric_level = getattr(logging, level.upper(), logging.INFO)
+    logging.getLogger().setLevel(numeric_level)
+    log.setLevel(numeric_level)
+
 
 # ──────────────────── workspace root ──────────────────────────
 ROOT = Path(os.getenv("LINTAI_SRC_CODE_ROOT", Path.cwd()))
@@ -155,7 +167,11 @@ def _runs() -> list[RunSummary]:
 
 
 def _save_runs(lst: list[RunSummary]):
-    _json_dump(RUNS_FILE, [r.model_dump() for r in lst])
+    # accept either RunSummary objects or plain dicts
+    serialised: list[dict] = []
+    for r in lst:
+        serialised.append(r.model_dump() if isinstance(r, RunSummary) else r)
+    _json_dump(RUNS_FILE, serialised)
 
 
 def _add_run(r: RunSummary):
@@ -175,12 +191,23 @@ def _set_status(rid: str, st: Literal["done", "error"]):
 
 #  helpers: choose which .env to hand to the CLI ---------------------------
 def _env_cli_flags(extra_env: str | None = None) -> list[str]:
+    """Determine which env file to use, prioritizing user-specified files."""
+    # 1. If an extra env file is explicitly provided, use that
     if extra_env:
         return ["-e", extra_env]
+
+    # 2. Check if user has configured a custom env file in the UI
+    pref = _load_cfg()
+    if pref.env_file:
+        return ["-e", pref.env_file]
+
+    # 3. Fall back to server's internal config files
     if SECR_ENV.exists():
         return ["-e", str(SECR_ENV)]
     if CFG_ENV.exists():
         return ["-e", str(CFG_ENV)]
+
+    # 4. No env file specified - CLI will auto-load .env from working directory
     return []
 
 
@@ -190,7 +217,7 @@ def _common_flags(depth: int | None, log_level: str | None):
     return (
         ["-d", str(depth or pref.ai_call_depth), "-l", log_level or pref.log_level]
         + ([] if pref.ruleset is None else ["-r", pref.ruleset])
-        + ([] if pref.env_file is None else ["-e", pref.env_file])
+        # Note: env_file is now handled by _env_cli_flags() to avoid conflicts
     )
 
 
@@ -208,18 +235,20 @@ def _kick(cmd: list[str], rid: str, bg: BackgroundTasks):
 
 
 def _report_path(rid: str, kind: RunType) -> Path:
-    return (
-        (DATA_DIR / rid / "scan_report.json")
-        if kind is RunType.scan
-        else (DATA_DIR / f"{rid}_inventory.json")
-    )
+    # Always use a subdirectory for both scan and inventory
+    subdir = DATA_DIR / rid
+    subdir.mkdir(parents=True, exist_ok=True)
+    if kind is RunType.scan:
+        return subdir / "scan_report.json"
+    else:
+        return subdir / "inventory.json"
 
 
 # ╭──────────────────────── FastAPI app ─────────────────────╮
 app = FastAPI(title="Lintai UI", docs_url="/api/docs", redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -300,25 +329,107 @@ def runs():
     return _runs()
 
 
+# ─────────── /last-result ──────
+@app.get("/api/last-result")
+def last_result():
+    """
+    Fetch the most recent run result along with its report if available.
+    """
+    runs = _runs()
+    if not runs:
+        return {"run": None, "report": None}
+    latest_run = max(runs, key=lambda r: r.created)
+    report_path = _report_path(latest_run.run_id, latest_run.type)
+    report = None
+    if report_path.exists():
+        report = json.loads(report_path.read_text())
+    return {"run": latest_run, "report": report}
+
+
+# ─────────── /last-result/{run_type} ──────
+@app.get("/api/last-result/{run_type}")
+def last_result_by_type(run_type: str):
+    """
+    Fetch the most recent run result of a specific type (scan or inventory)
+    along with its report if available.
+    """
+    runs = _runs()
+    if not runs:
+        return {"run": None, "report": None}
+
+    # Filter runs by type
+    filtered_runs = [r for r in runs if r.type == run_type]
+    if not filtered_runs:
+        return {"run": None, "report": None}
+
+    latest_run = max(filtered_runs, key=lambda r: r.created)
+    report_path = _report_path(latest_run.run_id, latest_run.type)
+    report = None
+    if report_path.exists():
+        report = json.loads(report_path.read_text())
+    return {"run": latest_run, "report": report}
+
+
+# ─────────── /history ──────────
+@app.get("/api/history")
+def history():
+    """
+    Fetch the history of all scan runs along with their stored reports if available.
+    Includes type of scans, date of scans, and files scanned.
+    """
+    runs = _runs()
+    if not runs:
+        return []
+
+    history = []
+    for run in runs:
+        report_path = _report_path(run.run_id, run.type)
+        report = None
+        errors = None
+        scanned_path = None
+        if report_path.exists():
+            report = json.loads(report_path.read_text())
+            errors = report.get("errors", None)
+            scanned_path = report.get("scanned_path")
+        history.append(
+            {
+                "type": run.type,
+                "date": run.created.isoformat(),
+                "scanned_path": scanned_path,
+                "errors": errors,
+                "run": run,
+                "report": report,
+            }
+        )
+    return history
+
+
 # ─────────── /scan ─────────────
 @app.post("/api/scan", response_model=RunSummary)
 async def scan(
     bg: BackgroundTasks,
-    files: list[UploadFile] = [],
-    path: str | None = None,
-    depth: int | None = None,
-    log_level: str | None = None,
+    files: list[UploadFile] = File(default=[]),
+    path: str | None = Query(None),  # Allow path to be passed as a query parameter
+    depth: int | None = Form(None),  # Depth in FormData
+    log_level: str | None = Form(None),  # Log level in FormData
 ):
+    # 1) create a fresh workspace for this run
     rid = str(uuid.uuid4())
     work = DATA_DIR / rid
     work.mkdir()
 
+    # 2) save each UploadFile, recreating any nested folders
     for up in files:
-        (work / up.filename).write_bytes(await up.read())
+        dest = work / up.filename  # up.filename may be "src/App.tsx"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(await up.read())
 
+    # 3) decide what to scan: the uploaded dir, or the provided path
     target = str(work if files else (path or _load_cfg().source_path))
-    out = _report_path(rid, RunType.scan)
+    reported_path = path or "." if files else target
 
+    # 4) build the CLI command & kick it off in background
+    out = _report_path(rid, RunType.scan)
     cmd = (
         ["lintai", "scan", target, "--output", str(out)]
         + _common_flags(depth, log_level)
@@ -326,12 +437,13 @@ async def scan(
     )
     _kick(cmd, rid, bg)
 
+    # 5) record & return the pending run
     run = RunSummary(
         run_id=rid,
         type=RunType.scan,
-        created=datetime.now(UTC),
+        created=datetime.now(timezone.utc),
         status="pending",
-        path=target,
+        path=reported_path,
     )
     _add_run(run)
     return run
@@ -365,7 +477,7 @@ def inventory(
     run = RunSummary(
         run_id=rid,
         type=RunType.inventory,
-        created=datetime.now(UTC),
+        created=datetime.now(timezone.utc),  # Use timezone.utc instead of UTC
         status="pending",
         path=path or _load_cfg().source_path,
     )
@@ -383,7 +495,33 @@ def results(rid: str):
     if not run:
         raise HTTPException(404)
     fp = _report_path(rid, run.type)
-    return {"status": "pending"} if not fp.exists() else json.loads(fp.read_text())
+    # return {"status": "pending"} if not fp.exists() else json.loads(fp.read_text())
+    if not fp.exists():
+        return {"status": "pending"}
+
+    data = json.loads(fp.read_text())
+    logging.debug(f"Processing finding location data: {data}")  # Debug log
+
+    if run.type is RunType.scan:
+        findings = data.get("findings")
+        if findings is None:
+            raise HTTPException(500, "scan report missing 'findings'")
+
+        base = (DATA_DIR / rid).resolve()
+
+        for f in findings:
+            loc = f.get("location")
+            if not loc:
+                continue
+            try:
+                # convert to Path and make it relative to base
+                rel = Path(loc).resolve().relative_to(base)
+                f["location"] = str(rel)
+            except Exception:
+                # if something doesn’t match, leave it unchanged
+                pass
+
+    return data
 
 
 # ---- findings filter helper
@@ -400,15 +538,15 @@ def filter_scan(
     if data["type"] != "scan":
         raise HTTPException(400, "not a scan run")
 
-    findings = data["data"]["findings"]
+    findings = data.get("findings", [])
     if severity:
-        findings = [f for f in findings if f["severity"] == severity]
+        findings = [f for f in findings if f.get("severity") == severity]
     if owasp_id:
         findings = [f for f in findings if owasp_id in f.get("owasp_id", "")]
     if component:
         findings = [f for f in findings if component in f.get("location", "")]
 
-    data["data"]["findings"] = findings
+    data["findings"] = findings
     return data
 
 
@@ -441,6 +579,29 @@ def subgraph(rid: str, node: str, depth: int = Query(1, ge=1, le=5)):
 # ─────────── static React bundle ──────────
 frontend = Path(__file__).parent / "frontend" / "dist"
 if frontend.exists():
-    app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
+    # Mount static assets first
+    app.mount("/assets", StaticFiles(directory=frontend / "assets"), name="assets")
+
+    # Serve individual static files
+    @app.get("/favicon.svg")
+    async def favicon():
+        from fastapi.responses import FileResponse
+
+        return FileResponse(frontend / "favicon.svg")
+
+    @app.get("/mockServiceWorker.js")
+    async def mock_service_worker():
+        from fastapi.responses import FileResponse
+
+        return FileResponse(frontend / "mockServiceWorker.js")
+
+    # SPA catch-all route - this MUST be defined LAST
+    @app.get("/{full_path:path}")
+    async def spa_handler(full_path: str):
+        from fastapi.responses import FileResponse
+
+        # Serve index.html for any non-API route (SPA fallback)
+        return FileResponse(frontend / "index.html")
+
 else:
     log.warning("UI disabled – React build not found at %s", frontend)

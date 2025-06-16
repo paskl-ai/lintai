@@ -17,7 +17,11 @@ import lintai.engine as _engine
 import uvicorn
 
 from lintai.engine.inventory_builder import build_inventory
-from lintai.engine.inventory_builder import classify_sink, detect_frameworks, extract_ast_components
+from lintai.engine.inventory_builder import (
+    classify_sink,
+    detect_frameworks,
+    extract_ast_components,
+)
 
 
 app = typer.Typer(
@@ -106,7 +110,8 @@ def scan_cmd(
     findings = [f for u in units for f in run_all(u)]
 
     # Save full report with LLM usage
-    report.write_scan_report(findings, output)
+    report_data = report.make_scan_report(findings, str(path))
+    report.write_report_obj(report_data, output)
 
     if output:
         typer.echo(f"\n✅ Report written to {output}")
@@ -213,7 +218,7 @@ def ai_inventory_cmd(
             additional = extract_ast_components(tree, file_path)
             components.extend(additional)
         except Exception as e:
-            print(f"❌ Error parsing AST for {file_path}: {e}")
+            typer.echo(f"❌ Error parsing AST for {file_path}: {e}")
             frameworks = []
 
         component_reports.append(
@@ -225,7 +230,8 @@ def ai_inventory_cmd(
         )
 
     if graph:
-        report.write_graph_inventory_report(graph_records, output)
+        doc = report.make_graph_inventory_report(graph_records, str(path))
+        report.write_report_obj(doc, output)
     else:
         if group_by == "file":
             grouped = defaultdict(
@@ -239,16 +245,14 @@ def ai_inventory_cmd(
                 grouped[comp["file"]]["frameworks"].extend(comp["frameworks"])
 
             output_data = [{"file": k, **v} for k, v in grouped.items()]
+            doc = report.make_simple_inventory_report(output_data, str(path))
         else:
             output_data = {
                 "ai_call_inventory": inventory,
                 "component_inventory": component_reports,
             }
-
-        if output:
-            output.write_text(json.dumps(output_data, indent=2))
-        else:
-            typer.echo(json.dumps(output_data, indent=2))
+            doc = report.make_simple_inventory_report(output_data, str(path))
+        report.write_report_obj(doc, output)
 
     if output:
         typer.echo(f"\n✅ Inventory written to {output}")
@@ -259,17 +263,35 @@ def ai_inventory_cmd(
 # ──────────────────────────────────────────────────────────────────────────────
 @app.command("ui", help="Launch browser UI")
 def ui_cmd(
+    ctx: Context,
     port: int = Option(8501, "--port", "-p", help="Port to listen on"),
     reload: bool = Option(False, "--reload", help="Auto-reload on code changes"),
+    log_level: str = Option("INFO", "--log-level", "-l", help="Logging level"),
 ):
     """
     Start FastAPI + React UI.
     """
+    # Initialize logging with the specified level
+    init_common(
+        ctx,
+        path=Path.cwd(),  # dummy path for UI
+        env_file=None,
+        log_level=log_level,
+        ai_call_depth=1,  # dummy depth for UI
+        ruleset=None,
+    )
+
+    # Set the server log level for CLI subprocesses
+    from lintai.ui.server import set_server_log_level
+
+    set_server_log_level(log_level)
+
     uvicorn.run(
         "lintai.ui.server:app",
         host="127.0.0.1",
         port=port,
         reload=reload,
+        log_level=log_level.lower(),
     )
 
 

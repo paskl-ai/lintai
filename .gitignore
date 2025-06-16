@@ -23,6 +23,7 @@ __pycache__/
 *.egg-info/
 .eggs/
 dist/
+lintaienv/
 build/
 *.egg
 
@@ -36,8 +37,14 @@ htmlcov/
 pytest_cache/
 
 #UI build artifacts and dependencies
-lintai/ui/frontend/dist/
-lintai/ui/frontend/node_modules/
+lintai/ui/frontend/node_modules
+lintai/ui/frontend/.DS_Store
+lintai/ui/frontend/dist
+lintai/ui/frontend/dist-ssr
+lintai/ui/frontend/*.local
+lintai/ui/frontend/.idea
+lintai/ui/frontend/.env
+
 
 
 # Docs
