@@ -110,7 +110,8 @@ def scan_cmd(
     findings = [f for u in units for f in run_all(u)]
 
     # Save full report with LLM usage
-    report.write_scan_report(findings, output)
+    report_data = report.make_scan_report(findings, str(path))
+    report.write_report_obj(report_data, output)
 
     if output:
         typer.echo(f"\n✅ Report written to {output}")
@@ -229,7 +230,8 @@ def ai_inventory_cmd(
         )
 
     if graph:
-        report.write_graph_inventory_report(graph_records, output)
+        doc = report.make_graph_inventory_report(graph_records, str(path))
+        report.write_report_obj(doc, output)
     else:
         if group_by == "file":
             grouped = defaultdict(
@@ -243,16 +245,14 @@ def ai_inventory_cmd(
                 grouped[comp["file"]]["frameworks"].extend(comp["frameworks"])
 
             output_data = [{"file": k, **v} for k, v in grouped.items()]
+            doc = report.make_simple_inventory_report(output_data, str(path))
         else:
             output_data = {
                 "ai_call_inventory": inventory,
                 "component_inventory": component_reports,
             }
-
-        if output:
-            output.write_text(json.dumps(output_data, indent=2))
-        else:
-            typer.echo(json.dumps(output_data, indent=2))
+            doc = report.make_simple_inventory_report(output_data, str(path))
+        report.write_report_obj(doc, output)
 
     if output:
         typer.echo(f"\n✅ Inventory written to {output}")

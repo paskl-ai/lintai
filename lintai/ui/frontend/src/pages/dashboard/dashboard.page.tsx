@@ -337,7 +337,7 @@ const Dashboard = () => {
         {/* ───────────────────────────────────────── RIGHT – ALERTS ───────────────────────────── */}
 
       </div>
- 
+
       <div className="py-3 font-semibold text-lg border-b border-primary">
         History of Scans
       </div>
@@ -359,7 +359,7 @@ const Dashboard = () => {
                     Date: {moment(item?.date).format('MMMM Do YYYY, h:mm:ss a')}
                   </p>
                   <p className="text-sm text-gray-600">
-                    Files Scanned: {item?.files?.length > 0 ? item?.files?.join(", ") : "No files scanned"}
+                    Files Scanned: {item?.scanned_path ? item.scanned_path : "No path recorded"}
                   </p>
                   {item?.errors && (
                     <p className="text-sm text-red-500">Errors: {item?.errors}</p>

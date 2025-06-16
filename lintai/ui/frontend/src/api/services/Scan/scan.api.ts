@@ -10,29 +10,29 @@ class Scan {
 
     async startScan(body: startScanDTO, files?: File[]) {
         const formData = new FormData();
-    
+
         if (files && files.length > 0) {
             files.forEach((file) => {
                 formData.append('files', file); // files are in form data
             });
         }
-    
+
         if (body.depth !== undefined) {
             formData.append('depth', body.depth.toString());
         }
-    
+
         if (body.logLevel) {
             formData.append('log_level', body.logLevel);
         }
-    
+
         const query = body?.path
             ? `?path=${encodeURIComponent(body?.path)}`
             : '';
-    
+
         const response = await api.post(`/api/scan${query}`, formData);
         return response.data;
     }
-    
+
 
     async scanInventory(body:scanInventoryDTO) {
         const params = {
@@ -65,7 +65,7 @@ class Scan {
         return response.data.map((item: any) => ({
             type: item.type,
             date: item.date,
-            files: item.files,
+            scanned_path: item.scanned_path,
             errors: item.errors,
             report: item.report,
         }));

@@ -343,21 +343,21 @@ def history():
         report_path = _report_path(run.run_id, run.type)
         report = None
         errors = None
-        files = None  # RunSummary does not have a 'files' attribute
+        scanned_path = None
         if report_path.exists():
             report = json.loads(report_path.read_text())
-            errors = report.get("errors", None)  # Extract errors if present
+            errors = report.get("errors", None)
+            scanned_path = report.get("scanned_path")
         history.append(
             {
                 "type": run.type,
                 "date": run.created.isoformat(),
-                "files": files,
+                "scanned_path": scanned_path,
                 "errors": errors,
                 "run": run,
                 "report": report,
             }
         )
-
     return history
 
 
