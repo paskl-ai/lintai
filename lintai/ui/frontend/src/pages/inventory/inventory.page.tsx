@@ -177,23 +177,23 @@ const Inventory = () => {
         const rec = row.original
         return (
           <div className="flex items-center gap-2">
-            <button
-              className="rounded-md border border-blue-500 px-3 py-1 text-xs text-blue-500 hover:bg-blue-500 hover:text-white"
+            <p
+              className="rounded-md   px-3 py-1 text-lg text-primary hover:text-white"
               onClick={(e) => {
                 e.stopPropagation()
                 setNetworkRecord(rec)
                 setIsNetworkModalOpen(true)
               }}
             >
-              View <TbGraph className="ml-1 inline" />
-            </button>
-            <a
+              View Scan 
+            </p>
+            {/* <a
               href={`vscode://file/${rec.at}`}
               className="rounded-md border border-green-500 px-3 py-1 text-xs text-green-500 hover:bg-green-500 hover:text-white"
               onClick={(e) => e.stopPropagation()}
             >
               Edit
-            </a>
+            </a> */}
           </div>
         )
       },
@@ -228,7 +228,7 @@ const Inventory = () => {
       <main className="flex-1">
         {/* Top bar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h3 className="text-lg font-bold text-gray-700">Scan Inventory</h3>
+          <h3 className="text-lg font-bold text-gray-700">Scan for Inventory</h3>
 
           <div className="flex items-center gap-2">
             <ConfigurationInfo />

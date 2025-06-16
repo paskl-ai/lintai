@@ -80,15 +80,14 @@ const Scan = () => {
         }`,
       )
 
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: [QueryKey.JOB] })
-      }, 2_000)
+     
 
       if (res?.run_id) {
         dispatch(
           startJob({
             jobId: res.run_id as any,
             jobStatus: 'Starting',
+          
           }),
         )
       } else {
@@ -117,7 +116,7 @@ const Scan = () => {
     },
     initialData: [],
     refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3_000 : false,
+    refetchInterval: isProcessing ? 3000 : false,
     enabled: !!runId,
   })
 
@@ -143,6 +142,8 @@ const Scan = () => {
   })
 
 if(lastScanError||scanError) {
+  console.log('scanError', scanError)
+  console.log('lastScanError', lastScanError)
     dispatch(resetJob())
     toast.dismiss() 
 }
@@ -198,6 +199,33 @@ if(lastScanError||scanError) {
         </span>
       ),
     },
+    {
+      header: 'Actions',
+      cell: ({ row }) => {
+        const rec = row.original
+        return (
+          <div className="flex items-center gap-2">
+            <p
+              className="rounded-md   px-3 py-1 text-lg text-primary hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation()
+                // setNetworkRecord(rec)
+                // setIsNetworkModalOpen(true)
+              }}
+            >
+              View Scan 
+            </p>
+            {/* <a
+              href={`vscode://file/${rec.at}`}
+              className="rounded-md border border-green-500 px-3 py-1 text-xs text-green-500 hover:bg-green-500 hover:text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Edit
+            </a> */}
+          </div>
+        )
+      },
+    },
   ]
 
   /* ------------------------------ Helpers ------------------------- */
@@ -250,7 +278,7 @@ if(lastScanError||scanError) {
             >
               <FiFolder className="mr-2" />
               <p>
-              Scan with Lint AI
+              Scan for Findings
 
               </p>
             </CommonButton>

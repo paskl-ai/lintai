@@ -202,7 +202,7 @@ const {
                 <FiMenu />
               </button>
             </div>
-            <div className="flex items-center justify-center ">
+            <div className="flex items-center justify-center  px-4">
               {isNested && (
                 <button
                   onClick={async () => navigate(-1)}
@@ -225,7 +225,7 @@ const {
             {headerButton?.onClick && (
               <button
                 onClick={headerButton.onClick}
-                className="bg-btn-act flex flex-row items-center rounded-lg px-4 py-2 text-base font-bold text-white"
+                className="bg-btn-act flex flex-row items-center  px-4 py-2 text-base font-bold text-white"
               >
                 <FaPlus className="mr-2" />
                 {headerButton.label}
@@ -260,7 +260,7 @@ const {
   <li>
                 <button
                   onClick={async () => navigate('/home')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/home')
+                  className={`flex w-full flex-row  px-4 py-2 text-left font-normal ${!isActive('/home')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}
@@ -275,7 +275,7 @@ const {
               <li>
                 <button
                   onClick={async () => navigate('/findings')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/findings')
+                  className={`flex w-full flex-row  px-4 py-2 text-left font-normal ${!isActive('/findings')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}
@@ -290,7 +290,7 @@ const {
               <li>
                 <button
                   onClick={async () => navigate('/inventory')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/inventory')
+                  className={`flex w-full flex-row  px-4 py-2 text-left font-normal ${!isActive('/inventory')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}
@@ -302,7 +302,7 @@ const {
               <li>
                 <button
                   onClick={async () => navigate('/settings')}
-                  className={`flex w-full flex-row rounded-lg px-4 py-2 text-left font-normal ${!isActive('/settings')
+                  className={`flex w-full flex-row  px-4 py-2 text-left font-normal ${!isActive('/settings')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}

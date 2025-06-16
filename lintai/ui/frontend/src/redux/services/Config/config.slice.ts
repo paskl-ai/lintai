@@ -23,7 +23,7 @@ const initialConfigState: ConfigState = {
     envFile: null,
     logLevel: 'INFO',
     ruleset: null,
-    sourcePath: '.',
+    sourcePath: '',
 }
 
 const initialEnvState: EnvState = {
