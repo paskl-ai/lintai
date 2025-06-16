@@ -218,7 +218,7 @@ def ai_inventory_cmd(
             additional = extract_ast_components(tree, file_path)
             components.extend(additional)
         except Exception as e:
-            print(f"❌ Error parsing AST for {file_path}: {e}")
+            typer.echo(f"❌ Error parsing AST for {file_path}: {e}")
             frameworks = []
 
         component_reports.append(

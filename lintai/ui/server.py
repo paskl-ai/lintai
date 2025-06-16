@@ -457,7 +457,7 @@ def results(rid: str):
         return {"status": "pending"}
 
     data = json.loads(fp.read_text())
-    print(f"Processing finding location data: {data}")  # Debug log
+    logging.debug(f"Processing finding location data: {data}")  # Debug log
 
     if run.type is RunType.scan:
         findings = data.get("findings")

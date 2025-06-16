@@ -44,4 +44,6 @@ def write_report_obj(obj: dict, out: Optional[Path]):
     if out:
         out.write_text(json_str)
     else:
-        print(json_str)
+        import typer
+
+        typer.echo(json_str)
