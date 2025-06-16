@@ -44,6 +44,14 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+
+def set_server_log_level(level: str) -> None:
+    """Set the log level for the server logger."""
+    numeric_level = getattr(logging, level.upper(), logging.INFO)
+    logging.getLogger().setLevel(numeric_level)
+    log.setLevel(numeric_level)
+
+
 # ──────────────────── workspace root ──────────────────────────
 ROOT = Path(os.getenv("LINTAI_SRC_CODE_ROOT", Path.cwd()))
 if not ROOT.is_dir():
@@ -183,12 +191,23 @@ def _set_status(rid: str, st: Literal["done", "error"]):
 
 #  helpers: choose which .env to hand to the CLI ---------------------------
 def _env_cli_flags(extra_env: str | None = None) -> list[str]:
+    """Determine which env file to use, prioritizing user-specified files."""
+    # 1. If an extra env file is explicitly provided, use that
     if extra_env:
         return ["-e", extra_env]
+
+    # 2. Check if user has configured a custom env file in the UI
+    pref = _load_cfg()
+    if pref.env_file:
+        return ["-e", pref.env_file]
+
+    # 3. Fall back to server's internal config files
     if SECR_ENV.exists():
         return ["-e", str(SECR_ENV)]
     if CFG_ENV.exists():
         return ["-e", str(CFG_ENV)]
+
+    # 4. No env file specified - CLI will auto-load .env from working directory
     return []
 
 
@@ -198,7 +217,7 @@ def _common_flags(depth: int | None, log_level: str | None):
     return (
         ["-d", str(depth or pref.ai_call_depth), "-l", log_level or pref.log_level]
         + ([] if pref.ruleset is None else ["-r", pref.ruleset])
-        + ([] if pref.env_file is None else ["-e", pref.env_file])
+        # Note: env_file is now handled by _env_cli_flags() to avoid conflicts
     )
 
 

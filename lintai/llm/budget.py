@@ -65,23 +65,55 @@ class BudgetManager:
 
     def reload(self) -> None:
         """(Re)read max_* limits from os.environ."""
+        import logging
+
         self.max_tokens = int(os.getenv("LINTAI_MAX_LLM_TOKENS", "50000"))
         self.max_cost_usd = Decimal(os.getenv("LINTAI_MAX_LLM_COST_USD", "10"))
         self.max_requests = int(os.getenv("LINTAI_MAX_LLM_REQUESTS", "500"))
+
+        logging.debug(
+            f"Budget limits reloaded - tokens: {self.max_tokens}, cost_usd: {self.max_cost_usd}, requests: {self.max_requests}"
+        )
+        logging.debug(
+            f"Environment variables - LINTAI_MAX_LLM_TOKENS: {os.getenv('LINTAI_MAX_LLM_TOKENS')}, LINTAI_MAX_LLM_COST_USD: {os.getenv('LINTAI_MAX_LLM_COST_USD')}, LINTAI_MAX_LLM_REQUESTS: {os.getenv('LINTAI_MAX_LLM_REQUESTS')}"
+        )
 
     # ──────────────────────────────────────────────────────────────────────
     #  public helpers
     # ──────────────────────────────────────────────────────────────────────
     def allow(self, est_prompt_tok: int, est_completion_tok: int, model: str) -> bool:
         """Return True if the *estimate* would stay within budget."""
+        import logging
+
         est_cost = _usd_for_tokens(est_prompt_tok + est_completion_tok, model)
         with self._lock:
+            total_est_tokens = self._tok_used + est_prompt_tok + est_completion_tok
+            total_est_cost = self._usd_used + est_cost
+            total_est_requests = self._req_used + 1
+
+            logging.debug(
+                f"Budget check - Current usage: tokens={self._tok_used}, cost_usd={self._usd_used}, requests={self._req_used}"
+            )
+            logging.debug(
+                f"Budget check - Estimated: prompt_tok={est_prompt_tok}, completion_tok={est_completion_tok}, cost={est_cost}"
+            )
+            logging.debug(
+                f"Budget check - Total estimated: tokens={total_est_tokens}, cost_usd={total_est_cost}, requests={total_est_requests}"
+            )
+            logging.debug(
+                f"Budget check - Limits: tokens={self.max_tokens}, cost_usd={self.max_cost_usd}, requests={self.max_requests}"
+            )
+
             if (
-                self._tok_used + est_prompt_tok + est_completion_tok > self.max_tokens
-                or self._usd_used + est_cost > self.max_cost_usd
-                or self._req_used + 1 > self.max_requests
+                total_est_tokens > self.max_tokens
+                or total_est_cost > self.max_cost_usd
+                or total_est_requests > self.max_requests
             ):
+                logging.debug(
+                    f"Budget exceeded - tokens: {total_est_tokens > self.max_tokens}, cost: {total_est_cost > self.max_cost_usd}, requests: {total_est_requests > self.max_requests}"
+                )
                 return False
+            logging.debug("Budget check passed")
             return True
 
     def commit(

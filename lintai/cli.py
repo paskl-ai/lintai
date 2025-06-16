@@ -263,17 +263,35 @@ def ai_inventory_cmd(
 # ──────────────────────────────────────────────────────────────────────────────
 @app.command("ui", help="Launch browser UI")
 def ui_cmd(
+    ctx: Context,
     port: int = Option(8501, "--port", "-p", help="Port to listen on"),
     reload: bool = Option(False, "--reload", help="Auto-reload on code changes"),
+    log_level: str = Option("INFO", "--log-level", "-l", help="Logging level"),
 ):
     """
     Start FastAPI + React UI.
     """
+    # Initialize logging with the specified level
+    init_common(
+        ctx,
+        path=Path.cwd(),  # dummy path for UI
+        env_file=None,
+        log_level=log_level,
+        ai_call_depth=1,  # dummy depth for UI
+        ruleset=None,
+    )
+
+    # Set the server log level for CLI subprocesses
+    from lintai.ui.server import set_server_log_level
+
+    set_server_log_level(log_level)
+
     uvicorn.run(
         "lintai.ui.server:app",
         host="127.0.0.1",
         port=port,
         reload=reload,
+        log_level=log_level.lower(),
     )
 
 
