@@ -1,3 +1,4 @@
+
 // Dashboard.tsx
 import { faker } from '@faker-js/faker'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
@@ -15,13 +16,16 @@ import {
 import moment from 'moment'
 import React, { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import { FaPlus } from 'react-icons/fa6'
-
-// import {  } from 'react-window'
-
-import { TbActivity, TbGraph } from 'react-icons/tb'
+import { TbActivity, TbGraph, TbScan } from 'react-icons/tb'
 import type { ListOnItemsRenderedProps } from 'react-window'
-
-
+import {
+  FiChevronDown,
+  FiChevronRight,
+  FiFileText,
+  FiFolder,
+  FiAlertCircle,
+  FiCheckCircle,
+} from 'react-icons/fi'
 
 import Spinner from '../../components/Spinner'
 import Skeleton from '../../components/skeleton/Skeleton'
@@ -30,9 +34,6 @@ import { ScanService } from '../../api/services/Scan/scan.api'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { toast } from 'react-toastify'
 import { resetJob } from '../../redux/services/ServerStatus/server.status.slice'
-import { FiChevronDown, FiChevronRight, FiFolder } from 'react-icons/fi'
-
-// ← export those props to clean the file
 
 const CustomGraph = lazy(
   async () => import('../../components/graph/CustomGraph'),
@@ -47,6 +48,7 @@ ChartJS.register(
   Legend,
   Filler,
 )
+
 interface Finding {
   owasp_id: string
   severity: 'blocker' | 'high' | 'medium' | 'low'
@@ -55,6 +57,7 @@ interface Finding {
   line: number
   fix: string
 }
+
 export const options = {
   responsive: true,
   plugins: {
@@ -63,7 +66,7 @@ export const options = {
       x: {
         grid: {
           display: true,
-          color: 'red', // Optional: customize grid line color
+          color: 'red',
         },
         ticks: {
           autoSkip: false,
@@ -73,130 +76,183 @@ export const options = {
       y: {
         grid: {
           display: true,
-          color: '#E5E7EB', // Optional: customize grid line color
+          color: '#E5E7EB',
         },
       },
     },
   },
 }
 
-const labels = [
-  '0',
-  '1',
-  '2',
-  '3',
-  '4',
-  '5',
-  '6',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12',
-  '13',
-  '14',
-  '15',
-  '16',
-  '17',
-  '18',
-  '19',
-  '20',
-  '21',
-  '22',
-  '23',
-]
-let width = 0,
-  height = 0,
-  gradient = 0
+const HistoryItem = ({ item, index }: { item: any; index: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
 
+  const toggleExpand = () => setIsExpanded(!isExpanded)
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'done':
+        return <FiCheckCircle className="text-green-500" size={20} />
+      case 'error':
+        return <FiAlertCircle className="text-red-500" size={20} />
+      default:
+        return <FiFileText size={20} />
+    }
+  }
 
-const pieLabels = ['Medium', 'Large', 'Extra Large']
-export const dynamicPieData = {
-  labels: pieLabels,
-  datasets: [
-    {
-      data: pieLabels.map(() => faker.number.int({ min: 10, max: 40 })),
-      backgroundColor: ['#88D5B3', '#EA9E99', '#C59FF3'],
-      borderColor: '#ffffff',
-      borderWidth: 2,
-    },
-  ],
+  const getSeverityChipClass = (severity: string) => {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return 'bg-red-100 text-red-800 border-red-300'
+      case 'blocker':
+        return 'bg-red-100 text-red-700 border-red-200'
+      case 'high':
+        return 'bg-orange-100 text-orange-800 border-orange-300'
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+      case 'low':
+        return 'bg-blue-100 text-blue-800 border-blue-300'
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300'
+    }
+  }
+
+  const findingsCount = item?.report?.findings?.length || 0
+
+  return (
+    <div className="border rounded-lg shadow-md bg-white mb-4 overflow-hidden">
+      <div
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+        onClick={toggleExpand}>
+        <div className="flex items-center space-x-4">
+          {getStatusIcon(item?.run?.status)}
+          <div>
+            <p className="text-lg font-semibold text-gray-800 capitalize">
+              {item?.type}
+              <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                {item?.run?.path}
+              </span>
+            </p>
+            <p className="text-sm text-gray-500">
+              {moment(item?.date).format('MMMM Do YYYY, h:mm:ss a')}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-4">
+          <span
+            className={`px-3 py-1 text-sm font-semibold rounded-full ${
+              findingsCount > 0
+                ? 'bg-red-100 text-red-800'
+                : 'bg-green-100 text-green-800'
+            }`}>
+            {findingsCount} Findings
+          </span>
+          <button className="text-gray-500 hover:text-gray-700">
+            {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <h4 className="font-semibold text-gray-700">Run Details</h4>
+              <p className="text-sm text-gray-600">
+                <strong>Run ID:</strong> {item?.run?.run_id}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Status:</strong>{' '}
+                <span
+                  className={`capitalize font-semibold ${
+                    item?.run?.status === 'error'
+                      ? 'text-red-600'
+                      : 'text-green-600'
+                  }`}>
+                  {item?.run?.status}
+                </span>
+              </p>
+            </div>
+            {item?.report?.llm_usage && (
+              <div>
+                <h4 className="font-semibold text-gray-700">LLM Usage</h4>
+                <p className="text-sm text-gray-600">
+                  <strong>Tokens Used:</strong>{' '}
+                  {item?.report?.llm_usage?.tokens_used}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>USD Used:</strong> $
+                  {item?.report?.llm_usage.usd_used?.toFixed(5)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-gray-700 mb-2">Findings</h4>
+            {findingsCount > 0 ? (
+              <div className="space-y-3">
+                {item?.report?.findings.map(
+                  (finding: any, findIndex: number) => (
+                    <div
+                      key={findIndex}
+                      className="p-3 bg-white rounded-md border border-gray-200">
+                      <div className="flex justify-between items-start">
+                        <p className="font-semibold text-md text-gray-800">
+                          {finding?.message}
+                        </p>
+                        <span
+                          className={`px-2 py-1 text-xs font-bold rounded-full border ${getSeverityChipClass(
+                            finding?.severity,
+                          )}`}>
+                          {finding?.severity.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        In{' '}
+                        <span className="font-mono bg-gray-100 px-1 rounded">
+                          {finding?.location}
+                        </span>{' '}
+                        at line{' '}
+                        <span className="font-semibold">{finding?.line}</span>
+                      </p>
+                      <p className="text-sm text-green-700 mt-2">
+                        <span className="font-semibold">Fix:</span>{' '}
+                        {finding?.fix}
+                      </p>
+                    </div>
+                  ),
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No findings for this scan.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
-const barLabels = ['Server 1', 'Server 2', 'Server 3', 'Server 4']
-export const dynamicBarData = {
-  labels: barLabels,
-  datasets: [
-    {
-      label: 'Dataset 1',
-      data: barLabels.map(() => faker.number.int({ min: 10, max: 40 })),
-      backgroundColor: '#88D5B3',
-      stack: 'Stack 0',
-    },
-    {
-      label: 'Dataset 2',
-      data: barLabels.map(() => faker.number.int({ min: 10, max: 40 })),
-      backgroundColor: '#EA9E99',
-      stack: 'Stack 1',
-    },
-    {
-      label: 'Dataset 3',
-      data: barLabels.map(() => faker.number.int({ min: 10, max: 40 })),
-      backgroundColor: '#C59FF3',
-      stack: 'Stack 2',
-    },
-    {
-      label: 'Dataset 4',
-      data: barLabels.map(() => faker.number.int({ min: 10, max: 40 })),
-      backgroundColor: '#EDC089',
-      stack: 'Stack 3',
-    },
-  ],
-}
-
-const ROW_HEIGHT = 60 // px – adjust to taste
-const LIST_HEIGHT = 800 // px – container height in the sidebar
-
-
-
-/** ------------------------------------------------------------------ *
- *  DASHBOARD COMPONENT
- * -------------------------------------------------------------------*/
 const Dashboard = () => {
-  const { jobId: runId, isProcessing } = useAppSelector(state => state.serverStatus)
-
+  const { jobId: runId, isProcessing } = useAppSelector(
+    state => state.serverStatus,
+  )
   const [selectedFilter, setSelectedFilter] = useState('hourly')
   const [selectedNetworkFilter, setSelectedNetworkFilter] = useState<
     'hourly' | 'daily'
   >('hourly')
-
-  const [selectedServer, setSelectedServer] = useState('')
-  const [selectedServerNetwork, setSelectedServerForNetwork] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [networkRecord, setNetworkRecord] = useState<any>(null);
-  const [isNetworkModalOpen, setIsNetworkModalOpen] = useState<boolean>(false);
   const dispatch = useAppDispatch()
-  /* When the virtual list renders items near the bottom,
-     trigger next page if available ----------------------------------*/
-
   const [expandedFiles, setExpandedFiles] = useState<string[]>([])
 
-  const {
-    data: scans,
-    isFetching: isFetchingScan,
-  } = useQuery({
-    queryKey: [QueryKey.JOB + 'inventory'],
+  const { data: scans, isFetching: isFetchingScan } = useQuery({
+    queryKey: [QueryKey.JOB + 'scan'],
     queryFn: async () => {
       const res = await ScanService.getResults(runId!!)
-
       if (res?.data) {
         dispatch(resetJob())
         toast.dismiss()
-
       }
-
       return res
     },
     initialData: [],
@@ -206,166 +262,75 @@ const Dashboard = () => {
     enabled: !!runId,
   })
 
-
-  const {
-    data: lastscan,
-    isFetching: isFetchingLastScan,
-  } = useQuery({
-    queryKey: [QueryKey.JOB + 'last'],
+  const { data: lastscan, isFetching: isFetchingLastScan } = useQuery({
+    queryKey: [QueryKey.JOB + 'last-scan'],
     queryFn: async () => {
-      const res = await ScanService.getLastResults()
-
-
-
+      const res = await ScanService.getLastResultsByType('scan')
       return res?.report
     },
     initialData: [],
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchInterval: isProcessing ? 3000 : false,
-    enabled: !!(!scans?.data?.records)
+    enabled: !scans?.data?.records,
   })
 
-  const {
-    data: history,
-    isFetching: isFetchingHistory,
-  } = useQuery({
+  const { data: history, isFetching: isFetchingHistory } = useQuery({
     queryKey: [QueryKey.JOB + 'history'],
     queryFn: async () => {
-      const res = await ScanService.getHistory(); // Fetch history using the new API
-      return res;
+      const res = await ScanService.getHistory()
+      return res
     },
     initialData: [],
     refetchOnMount: true,
     refetchOnWindowFocus: false,
-  });
-
-  const llmUsage = scans?.llm_usage || lastscan?.llm_usage;
-  const findings: Finding[] = (scans?.findings || lastscan?.findings as Finding[]) ?? [];
-  const filteredFindings = findings.filter((finding: Finding) => {
-    const matchesSearch =
-      finding.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      finding.owasp_id.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesSearch
   })
 
-  const inventoryRecords = scans?.data?.records || lastscan?.data?.records || [];
-  const filteredInventoryRecords = inventoryRecords.filter((record: any) => {
-    const searchLower = searchQuery.toLowerCase()
-    return (
-      record.sink.toLowerCase().includes(searchLower) ||
-      record.at.toLowerCase().includes(searchLower)
-    )
-  })
-  const handleNetworkView = (record: any) => {
-    setNetworkRecord(record);
-    setIsNetworkModalOpen(true);
-  };
-
-  const closeNetworkModal = () => {
-    setIsNetworkModalOpen(false);
-    setNetworkRecord(null);
-  };
-  const groupedFindings = filteredFindings?.reduce((acc: { [x: string]: Finding[] }, finding: Finding) => {
-    if (!acc[finding.location]) acc[finding.location] = []
-    acc[finding.location].push(finding)
-    return acc
-  }, {} as Record<string, Finding[]>)
-  // console.log(PerformanceMetricDATA, 'stat data')
-  const getSeverityChip = (label: string, count: number, color: string) => (
-    <span className={`border ${color} text-${color} px-2 py-1 rounded-sm text-sm font-bold`}>
-      {label} {count}
-    </span>
-  )
-  const toggleExpand = (filePath: string) => {
-    setExpandedFiles((prev) =>
-      prev.includes(filePath) ? prev.filter((path) => path !== filePath) : [...prev, filePath]
-    )
-  }
   return (
     <div className="p-6 sm:ml-50 ">
       <div className="flex flex-col gap-4 md:flex-row">
-        {/* ───────────────────────────────────────── LEFT ─────────────────────────────────────── */}
         <div className="flex-1 space-y-6 sm:w-max md:w-2/3">
-          {/* Metric cards */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
-            {/* card 1 */}
             <div className="bg-card_bgLight rounded-lg border p-4">
               <h3 className="text-sm font-medium text-neutral-950">
                 Total Files Scanned
               </h3>
-              {false ? (
-                <Skeleton className="mt-4 h-8 w-full text-xl font-bold text-primary" />
-              ) : (
-                <p className="mt-4 text-xl font-bold text-primary">
-                  {20}
-                </p>
-              )}
-              {/* <p className="mt-4 text-sm text-neutral-600">
-                +3 more than last month
-              </p> */}
+              <p className="mt-4 text-xl font-bold text-primary">{20}</p>
             </div>
-            {/* card 2 */}
             <div className="bg-card_bgLight rounded-lg border p-4">
               <h3 className="text-sm font-medium text-neutral-950">
-              Findings with OWASP
+                Findings with OWASP
               </h3>
-              {false ? (
-                <Skeleton className="mt-4 h-8 w-full text-xl font-bold text-primary" />
-              ) : (
-                <p className="mt-4 text-xl font-bold text-primary">
-                  12
-                </p>
-              )}
-              {/* <button className="bg-primaryContainer text-primaryBgText mt-4 flex items-center gap-2 rounded-md px-3 py-1 text-sm font-bold shadow-sm hover:bg-gray-300">
-                <FaPlus /> Invite user
-              </button> */}
+              <p className="mt-4 text-xl font-bold text-primary">12</p>
             </div>
-            {/* card 3 */}
             <div className="bg-card_bgLight rounded-lg border p-4">
               <h3 className="text-sm font-medium text-neutral-950">
-              Findings with Mitre
+                Findings with Mitre
               </h3>
               <p className="mt-4 text-xl font-bold text-primary">6</p>
-              {/* <p className="mt-4 text-sm text-neutral-600">15% under budget</p> */}
             </div>
           </div>
-
-
         </div>
-
-        {/* ───────────────────────────────────────── RIGHT – ALERTS ───────────────────────────── */}
-
       </div>
- 
-      <div className="py-3 font-semibold text-lg border-b border-primary">
+
+      <div className="py-3 mt-6 font-semibold text-xl border-b border-gray-300">
         History of Scans
       </div>
-      <div>
+      <div className="mt-4">
         {isFetchingHistory ? (
-          <div className="text-gray-500">Loading history...</div>
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <Spinner />
+            <span className="ml-2">Loading history...</span>
+          </div>
         ) : history.length === 0 ? (
           <div className="my-20 flex flex-col items-center justify-center h-full text-gray-500">
             <FiFolder size={48} className="mb-4" />
             <p className="text-lg font-semibold">No scan history found</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div>
             {history?.map((item: any, index: number) => (
-              <div key={index} className="border rounded-lg p-4 shadow-sm bg-white">
-                <div className="flex flex-col space-y-2">
-                  <p className="text-lg font-bold text-gray-800">Scan Type: {item?.type}</p>
-                  <p className="text-sm text-gray-600">
-                    Date: {moment(item?.date).format('MMMM Do YYYY, h:mm:ss a')}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Files Scanned: {item?.files?.length > 0 ? item?.files?.join(", ") : "No files scanned"}
-                  </p>
-                  {item?.errors && (
-                    <p className="text-sm text-red-500">Errors: {item?.errors}</p>
-                  )}
-                </div>
-              </div>
+              <HistoryItem item={item} index={index} />
             ))}
           </div>
         )}
@@ -374,4 +339,5 @@ const Dashboard = () => {
   )
 }
 
-export default Dashboard
+export default Dashboard;
+

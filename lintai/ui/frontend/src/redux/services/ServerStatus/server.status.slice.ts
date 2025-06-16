@@ -22,7 +22,7 @@ export const serverStatusSlice = createSlice({
   name: 'serverStatus',
   initialState,
   reducers: {
-  
+
     // When a job is created, store its ID and initial status, and set processing to true
     startJob: (
       state: Draft<IInitialState>,

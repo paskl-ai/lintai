@@ -79,10 +79,10 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
       <div className="fixed inset-0 bg-primaryBg/70  flex justify-center items-center z-50">
         <div className="bg-white w-3/4 h-3/4 rounded-lg shadow-lg overflow-hidden flex flex-col">
           <div className="flex justify-between items-center p-4 border-b">
-         
+
             <p className="text-gray-600">Current Path: {currentPath || '/'}</p>
             <div className="flex space-x-4">
-         
+
               <button
                 className="text-red-500 font-bold"
                 onClick={() => setIsModalOpen(false)}
@@ -102,7 +102,7 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <div className="mb-4">
-        
+
             </div>
             {loading ? (
               <p>Loading...</p>
@@ -136,7 +136,7 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
                 ))}
               </ul>
             )}
-             
+
           </div>
 <div className='flex flex-row justify-between min-w-full'>
 { (
@@ -155,7 +155,7 @@ const FileSystemPage: React.FC<FileSystemPageProps> = ({ handleScan ,setIsModalO
                 Select
               </CommonButton>
 </div>
-      
+
         </div>
       </div>
     </>

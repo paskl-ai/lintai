@@ -3,6 +3,7 @@ from __future__ import annotations
 import json, importlib
 from pathlib import Path
 
+import logging
 import pytest
 from fastapi.testclient import TestClient
 
@@ -73,13 +74,17 @@ def _fake_report(rid: str, kind: str):
         fp = ui.DATA_DIR / rid / "scan_report.json"
         data = {
             "type": "scan",
-            "data": {"llm_usage": {}, "findings": [{"severity": "high"}]},
+            "llm_usage": {},
+            "findings": [{"severity": "high"}],
         }
     else:
-        fp = ui.DATA_DIR / f"{rid}_inventory.json"
+        fp = (
+            ui.DATA_DIR / rid / "inventory.json"
+        )  # Updated to match new backend structure
         data = {"type": "inventory", "data": {"nodes": [{"id": "A"}], "edges": []}}
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(json.dumps(data))
+    logging.debug(f"_fake_report wrote to {fp.resolve()}: {fp.read_text()}")
 
 
 def test_full_flow(client, monkeypatch, tmp_path):
@@ -97,12 +102,20 @@ def test_full_flow(client, monkeypatch, tmp_path):
     _fake_report(r1["run_id"], "scan")
     _fake_report(r2["run_id"], "inventory")
 
+    # Print the path the server will read for debugging
+    logging.debug(
+        f"server expects scan report at: {ui.DATA_DIR / r1['run_id'] / 'scan_report.json'}"
+    )
+    logging.debug(
+        f"server expects inventory report at: {ui.DATA_DIR / r2['run_id'] / 'inventory.json'}"
+    )
+
     assert client.get(f"/api/results/{r1['run_id']}").json()["type"] == "scan"
     assert client.get(f"/api/results/{r2['run_id']}").json()["type"] == "inventory"
 
     assert client.get(
         f"/api/results/{r1['run_id']}/filter", params={"severity": "high"}
-    ).json()["data"]["findings"]
+    ).json()["findings"]
 
     assert client.get(
         f"/api/inventory/{r2['run_id']}/subgraph", params={"node": "A"}

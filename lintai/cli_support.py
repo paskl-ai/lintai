@@ -70,13 +70,23 @@ def iter_python_files(root: Path, ignore_spec: pathspec.PathSpec) -> Iterable[Pa
 
 def maybe_load_env(env_path: Path | None) -> None:
     """best-effort .env reader (identical logic used by scan / inventory)."""
-    target = env_path or Path(".env")
+    if env_path is not None:
+        # Explicit env file specified
+        target = env_path
+        # Override existing env vars when explicit file is specified
+        should_override = True
+    else:
+        # Default to .env in current directory
+        target = Path(".env")
+        # Don't override when loading default .env
+        should_override = False
+
     if not target.exists():
         return
     try:
         from dotenv import load_dotenv
 
-        load_dotenv(dotenv_path=target, override=False)
+        load_dotenv(dotenv_path=target, override=should_override)
         logger.info("Loaded provider settings from %s (python-dotenv)", target)
         # reload budget manager to pick up new limits
         budget.manager.reload()
@@ -117,7 +127,23 @@ def init_common(
 ):
     """Shared bootstrap executed before *every* command."""
     # logging
-    logging.getLogger().setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    log_level_obj = getattr(logging, log_level.upper(), logging.INFO)
+    logging.getLogger().setLevel(log_level_obj)
+
+    # Debug: dump environment variables when at debug level
+    if log_level_obj <= logging.DEBUG:
+        logger.debug("=== CLI Environment Debug ===")
+        logger.debug(f"Log level: {log_level}")
+        logger.debug(f"Environment file: {env_file}")
+        logger.debug("LLM Environment Variables:")
+        for key, value in os.environ.items():
+            if (
+                key.startswith("LINTAI_")
+                or key.startswith("OPENAI_")
+                or key.startswith("ANTHROPIC_")
+            ):
+                logger.debug(f"  {key}={value}")
+        logger.debug("=== End Environment Debug ===")
 
     if not path.exists():
         ctx.fail(f"Path '{path}' does not exist.")

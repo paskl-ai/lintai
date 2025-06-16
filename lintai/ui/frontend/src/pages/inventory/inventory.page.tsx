@@ -129,8 +129,8 @@ const Inventory = () => {
     isFetching: isFetchingLastScan,
     error: lastScanError,
   } = useQuery({
-    queryKey: [QueryKey.JOB + 'last'],
-    queryFn: async () => (await ScanService.getLastResults()).report,
+    queryKey: [QueryKey.JOB + 'last-inventory'],
+    queryFn: async () => (await ScanService.getLastResultsByType('inventory')).report,
     initialData: [],
     refetchOnWindowFocus: false,
     enabled: !scans?.data?.records,
@@ -151,7 +151,7 @@ const Inventory = () => {
 
   if(lastScanError||scanError) {
       dispatch(resetJob())
-      toast.dismiss() 
+      toast.dismiss()
   }
   /* ------------------------------ Column defs -------------------- */
   const columns: ColumnDef<InventoryRecord>[] = [
@@ -232,7 +232,7 @@ const Inventory = () => {
 
           <div className="flex items-center gap-2">
             <ConfigurationInfo />
-{/* 
+{/*
             <div className="relative">
               <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
               <input
@@ -284,7 +284,7 @@ const Inventory = () => {
         //   loading={isFetchingScan || isFetchingLastScan}
           data={tableData}
           columns={columns}
-          
+
         //   handleRowClick={handleRowClick}
         //   pageSize={10}
         //   enableSorting

@@ -125,16 +125,16 @@ const Scan = () => {
     isFetching: isFetchingLastScan,
     error: lastScanError,
   } = useQuery({
-    queryKey: [QueryKey.JOB + 'last'],
+    queryKey: [QueryKey.JOB + 'last-scan'],
     queryFn: async () => {
-      const res = await ScanService.getLastResults()
+      const res = await ScanService.getLastResultsByType('scan')
       if (res?.data || res?.findings) {
         dispatch(resetJob())
         toast.dismiss()
       }
       return res.report
     },
-    
+
     initialData: [],
     refetchOnWindowFocus: false,
     refetchInterval: isProcessing ? 3_000 : false,
@@ -145,7 +145,7 @@ if(lastScanError||scanError) {
   console.log('scanError', scanError)
   console.log('lastScanError', lastScanError)
     dispatch(resetJob())
-    toast.dismiss() 
+    toast.dismiss()
 }
 
   /* ------------------------------ Derived data -------------------- */
@@ -269,7 +269,7 @@ if(lastScanError||scanError) {
           {/* RHS controls */}
           <div className="flex flex-row items-center gap-2">
             <ConfigurationInfo />
-        
+
 
             <CommonButton
               loading={isProcessing}
@@ -312,7 +312,7 @@ if(lastScanError||scanError) {
 
         {/* Findings Table */}
         <Table
-     
+
           data={tableData}
           columns={columns}
         //   pageSize={10}

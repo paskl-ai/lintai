@@ -6,7 +6,7 @@ interface DataFlowVisualiseProps {
   records?: {
     elements:{ nodes?: any[];
         edges?: any[];}
-   
+
   };
 }
 
