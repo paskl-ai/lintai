@@ -460,8 +460,8 @@ def results(rid: str):
     print(f"Processing finding location data: {data}")  # Debug log
 
     if run.type is RunType.scan:
-        findings = data.get("data", {}).get("findings", [])
-        if not findings:
+        findings = data.get("findings")
+        if findings is None:
             raise HTTPException(500, "scan report missing 'findings'")
 
         base = (DATA_DIR / rid).resolve()
@@ -495,15 +495,15 @@ def filter_scan(
     if data["type"] != "scan":
         raise HTTPException(400, "not a scan run")
 
-    findings = data["data"]["findings"]
+    findings = data.get("findings", [])
     if severity:
-        findings = [f for f in findings if f["severity"] == severity]
+        findings = [f for f in findings if f.get("severity") == severity]
     if owasp_id:
         findings = [f for f in findings if owasp_id in f.get("owasp_id", "")]
     if component:
         findings = [f for f in findings if component in f.get("location", "")]
 
-    data["data"]["findings"] = findings
+    data["findings"] = findings
     return data
 
 
