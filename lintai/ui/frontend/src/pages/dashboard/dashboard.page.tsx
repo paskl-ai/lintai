@@ -211,9 +211,9 @@ const Dashboard = () => {
     data: lastscan,
     isFetching: isFetchingLastScan,
   } = useQuery({
-    queryKey: [QueryKey.JOB + 'last'],
+    queryKey: [QueryKey.JOB + 'last-scan'],
     queryFn: async () => {
-      const res = await ScanService.getLastResults()
+      const res = await ScanService.getLastResultsByType('scan')
 
 
 

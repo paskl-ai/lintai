@@ -60,6 +60,11 @@ class Scan {
         return response.data
     }
 
+    async getLastResultsByType(type: string) {
+        const response = await api.get(`/api/last-result/${type}`) // Get last result by type
+        return response.data
+    }
+
     async getHistory() {
         const response = await api.get('/api/history'); // Updated endpoint for history
         return response.data.map((item: any) => ({

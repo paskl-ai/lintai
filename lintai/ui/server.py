@@ -346,6 +346,30 @@ def last_result():
     return {"run": latest_run, "report": report}
 
 
+# ─────────── /last-result/{run_type} ──────
+@app.get("/api/last-result/{run_type}")
+def last_result_by_type(run_type: str):
+    """
+    Fetch the most recent run result of a specific type (scan or inventory)
+    along with its report if available.
+    """
+    runs = _runs()
+    if not runs:
+        return {"run": None, "report": None}
+
+    # Filter runs by type
+    filtered_runs = [r for r in runs if r.type == run_type]
+    if not filtered_runs:
+        return {"run": None, "report": None}
+
+    latest_run = max(filtered_runs, key=lambda r: r.created)
+    report_path = _report_path(latest_run.run_id, latest_run.type)
+    report = None
+    if report_path.exists():
+        report = json.loads(report_path.read_text())
+    return {"run": latest_run, "report": report}
+
+
 # ─────────── /history ──────────
 @app.get("/api/history")
 def history():
