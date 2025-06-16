@@ -4,10 +4,10 @@
    import React, { useEffect, useRef } from 'react';
    import cytoscape, { CssStyleDeclaration, LayoutOptions } from 'cytoscape';
    import dagre from 'cytoscape-dagre';
-   
+
    // 1️⃣  enable dagre layout plugin
    cytoscape.use(dagre);
-   
+
    /* ----------  Types  ---------- */
    export interface NodeData {
      data: {
@@ -17,7 +17,7 @@
        value?: string;         // extra
      };
    }
-   
+
    export interface EdgeData {
      data: {
        id?: string;
@@ -25,7 +25,7 @@
        target: string;
      };
    }
-   
+
    export interface CytoscapeGraphProps {
      nodes: NodeData[];
      edges: EdgeData[];
@@ -34,15 +34,15 @@
      /** Override the layout; defaults to LR dagre */
      layout?: LayoutOptions;
    }
-   
+
    /* ----------  Visual theme  ---------- */
    const modernStyle: CssStyleDeclaration[] = [
      /* base node */
      {
        selector: 'node',
        style: {
-        
-      
+
+
          'text-max-width': 120,
          'text-valign': 'center',
          'text-halign': 'center',
@@ -73,7 +73,7 @@
        style: {
          'background-color': '#FF6B6B',
          'background-gradient-stop-colors': '#FF9C9C #FF6B6B',
-         shape: "round-rectangle" 
+         shape: "round-rectangle"
               },
      },
      /* edges */
@@ -109,7 +109,7 @@
        },
      },
    ];
-   
+
    /* ----------  Default LR dagre layout  ---------- */
    const horizontalDagre: LayoutOptions = {
      name: 'dagre',
@@ -121,7 +121,7 @@
      fit: true,
      padding: 0,
    };
-   
+
    /* ----------  Component  ---------- */
    export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
      nodes,
@@ -130,10 +130,10 @@
      layout,
    }) => {
      const containerRef = useRef<HTMLDivElement>(null);
-   
+
      useEffect(() => {
        if (!containerRef.current) return;
-   
+
        const cy = cytoscape({
          container: containerRef.current,
          elements: [...nodes, ...edges],
@@ -141,17 +141,17 @@
          layout: layout || horizontalDagre,
          wheelSensitivity: 0.2,
        });
-   
+
        /* --- bubble-expand / collapse behaviour --- */
        cy.on('tap', 'node', (evt) => {
          const node = evt.target;
          const expanded = Boolean(node.data('expanded'));
-   
+
          // remember original size once
          const baseW = node.data('baseW') ?? node.width();
          const baseH = node.data('baseH') ?? node.height();
          if (node.data('baseW') == null) node.data({ baseW, baseH });
-   
+
          if (expanded) {
            /* collapse */
            node.animate(
@@ -175,17 +175,16 @@
            node.addClass('expanded').data('expanded', true);
            node.connectedEdges().addClass('highlighted');
          }
-   
+
          /* re-run dagre so neighbours slide out of the way */
          cy.layout(layout || horizontalDagre).run();
        });
-   
+
        /* cleanup on unmount */
        return () => cy.destroy();
      }, [nodes, edges, styleDefs, layout]);
-   
+
      return <div ref={containerRef} className="w-full h-full bg-neutral-950" />;
    };
-   
+
    export default CytoscapeGraph;
-   

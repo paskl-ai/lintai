@@ -135,7 +135,7 @@ const Scan = () => {
       }
       return res.report
     },
-    
+
     initialData: [],
     refetchOnWindowFocus: false,
     refetchInterval: isProcessing ? 3_000 : false,
@@ -144,7 +144,7 @@ const Scan = () => {
 
 if(lastScanError||scanError) {
     dispatch(resetJob())
-    toast.dismiss() 
+    toast.dismiss()
 }
 
   /* ------------------------------ Derived data -------------------- */
@@ -241,7 +241,7 @@ if(lastScanError||scanError) {
           {/* RHS controls */}
           <div className="flex flex-row items-center gap-2">
             <ConfigurationInfo />
-        
+
 
             <CommonButton
               loading={isProcessing}
@@ -284,7 +284,7 @@ if(lastScanError||scanError) {
 
         {/* Findings Table */}
         <Table
-     
+
           data={tableData}
           columns={columns}
         //   pageSize={10}

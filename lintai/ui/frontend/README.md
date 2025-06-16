@@ -23,21 +23,24 @@ This is the frontend web interface for the LintAI project. It is built with Reac
 
 Make sure you have the following installed on your system:
 
-1. **Node.js**: Version 20 or higher.  
+1. **Node.js**: Version 20 or higher.
    Install it from the [Node.js official website](https://nodejs.org/) or via a package manager:
+
    ```bash
    # macOS (Homebrew)
    brew install node
    ```
 
-2. **Yarn**: A package manager for JavaScript.  
+2. **Yarn**: A package manager for JavaScript.
    Install it globally if not already installed:
+
    ```bash
    npm install -g yarn
    ```
 
-3. **Vite**: A fast build tool for modern web apps.  
+3. **Vite**: A fast build tool for modern web apps.
    Install it globally (optional, as Vite is already included as a dev dependency):
+
    ```bash
    npm install -g vite
    ```
@@ -124,18 +127,21 @@ The project uses **Mock Service Worker (MSW)** to simulate API responses during 
 
 1. **`yarn: command not found`**:
    - Ensure Yarn is installed globally:
+
      ```bash
      npm install -g yarn
      ```
 
 2. **Outdated Dependencies**:
    - If you encounter warnings, try updating dependencies:
+
      ```bash
      yarn upgrade
      ```
 
 3. **Port Conflicts**:
    - If the default port (`8501`) is in use, you can specify a different port:
+
      ```bash
      lintai ui --port 8502
      ```
