@@ -75,23 +75,12 @@ def top_callback(
 @app.command("scan", help="Run all detectors and emit findings JSON.")
 def scan_cmd(
     ctx: Context,
-    path: Path = Argument(
-        ..., exists=True, readable=True, help="File or directory to analyse"
-    ),
-    ruleset: Path | None = Option(
-        None, "--ruleset", "-r", help="Custom rule file/folder"
-    ),
+    path: Path = Argument(..., exists=True, readable=True, help="File or directory to analyse"),
+    ruleset: Path | None = Option(None, "--ruleset", "-r", help="Custom rule file/folder"),
     env_file: Path | None = Option(None, "--env-file", "-e", help="Optional .env"),
     log_level: str = Option("INFO", "--log-level", "-l", help="Logging level"),
-    ai_call_depth: int = Option(
-        2,
-        "--ai-call-depth",
-        "-d",
-        help="How many caller layers to mark as AI-related (default 2)",
-    ),
-    output: Path = Option(
-        None, "--output", "-o", help="Write JSON output to file (default: stdout)"
-    ),
+    ai_call_depth: int = Option(2, "--ai-call-depth", "-d", help="How many caller layers to mark as AI-related (default 2)"),
+    output: Path = Option(None, "--output", "-o", help="Write JSON output to file (default: stdout)"),
 ):
     _bootstrap(
         ctx,
@@ -103,14 +92,19 @@ def scan_cmd(
     )
 
     units = ctx.obj["units"]
-    findings = [f for u in units for f in run_all(u)]
+    findings = []
+    for u in units:
+        findings.extend(run_all(u))
 
     # Save full report with LLM usage
     report.write_scan_report(findings, output)
 
     if output:
         typer.echo(f"\n✅ Report written to {output}")
-    raise typer.Exit(1 if any(f.severity == "blocker" for f in findings) else 0)
+    
+    # Exit with an error code if there are blocking findings
+    if any(f.severity in ("blocker", "critical") for f in findings):
+        raise typer.Exit(1)
 
 
 def create_graph_payload(inventories: List[FileInventory]) -> Dict[str, List[Dict[str, Any]]]:

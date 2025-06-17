@@ -42,6 +42,10 @@ class ProjectAnalyzer:
             for component in inventory.components:
                 if self._call_graph.has_node(component.name):
                     component.call_chain = list(self._call_graph.predecessors(component.name))
+
+        # === Pass 4: Mark AI Modules ===
+        self._mark_ai_modules()
+        
         return self
 
     def _track_imports_and_defs(self, tree: ast.AST, unit: PythonASTUnit):
@@ -140,7 +144,22 @@ class ProjectAnalyzer:
                     component_type = "Prompt"
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
              name = unit.qualname(node)
-             component_type = "Function"
+             is_tool = False
+             for decorator in node.decorator_list:
+                 decorator_name = ""
+                 if isinstance(decorator, ast.Name):
+                     decorator_name = decorator.id
+                 elif isinstance(decorator, ast.Call):
+                     decorator_name = get_full_attr_name(decorator.func)
+                 
+                 if decorator_name == 'tool':
+                     is_tool = True
+                     break
+            
+             if is_tool:
+                 component_type = "Tool"
+             else:
+                 component_type = "Function"
         
         if not name or component_type in ["Ignore", "Unknown"]:
             return None
@@ -159,3 +178,19 @@ class ProjectAnalyzer:
                 return current
             current = getattr(current, 'parent', None)
         return None
+
+    def _mark_ai_modules(self):
+        """
+        Sets the .is_ai_module flag on any SourceUnit that contains
+        at least one AI component in our final inventory.
+        """
+        # Find all file paths that have AI components
+        ai_files = set()
+        for inventory in self.inventories.values():
+            if inventory.components:
+                ai_files.add(inventory.file_path)
+        
+        # Set the flag on the corresponding unit objects
+        for unit in self.units:
+            if str(unit.path) in ai_files:
+                unit.is_ai_module = True
