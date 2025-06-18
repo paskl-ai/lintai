@@ -67,6 +67,8 @@
          'transition-duration': '250ms',
        },
      },
+     { selector: 'node[label="file"]', style: { 'background-color': '#FFD166', 'border-color': '#D9A400' }},
+
      /* sinks look different */
      {
        selector: 'node[label = "sink"]',
@@ -184,7 +186,7 @@
        return () => cy.destroy();
      }, [nodes, edges, styleDefs, layout]);
 
-     return <div ref={containerRef} className="w-full h-full bg-neutral-950" />;
+     return <div ref={containerRef} className="w-full h-full " />;
    };
 
    export default CytoscapeGraph;

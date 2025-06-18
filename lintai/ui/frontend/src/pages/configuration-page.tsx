@@ -140,7 +140,7 @@ const ConfigurationPage: React.FC = () => {
   }
 
   return (
-    <div className=" max-w-4xl mx-60">
+    <div className=" max-w-4xl mx-60  mt-20">
       {/* Page Title */}
       <div className='flex justify-between items-center text-center border-b pb-3 mb-8'>
         

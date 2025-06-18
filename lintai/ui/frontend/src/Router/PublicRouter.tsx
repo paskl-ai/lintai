@@ -8,18 +8,26 @@ import FileSystemPage from '../pages/filesystem/filesystem.page'
 import Inventory from '../pages/inventory/inventory.page'
 import ConfigurationPage from '../pages/configuration-page'
 import Scan from '../pages/scan/scan.page'
+import FindingsDetailsPage from '../pages/details/findings-details.page'
+import InventoryDetailsPage from '../pages/details/inventory-details.page'
 
 const PublicRouter = () => {
   return (
     <Routes>
       <Route path="" element={<DefaultLayout />}>
-      <Route path="/home" element={<Dashboard />} />
+        <Route path="/home" element={<Dashboard />} />
 
-        <Route path="/findings" element={<Scan />} />
-        <Route path="/data-flow" element={<DataFlowVisualise />} />
-        <Route path="/inventory" element={<Inventory />} />
+        <Route path="/findings" element={<Scan />} >
+        </Route>
+        <Route path="/findings/details/:pagelocation" element={<FindingsDetailsPage />} />
+
+        <Route path="/inventory" element={<Inventory />} >
+        </Route>
+        <Route path="/inventory/details/:pagelocation" element={<InventoryDetailsPage />} />
+
+
         <Route path="/settings" element={<ConfigurationPage />} />
-
+        <Route path="/data-flow" element={<DataFlowVisualise />} />
       </Route>
       <Route path="/*" element={<NotFound />} />
     </Routes>

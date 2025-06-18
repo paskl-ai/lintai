@@ -34,6 +34,7 @@ import { ScanService } from '../../api/services/Scan/scan.api'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { toast } from 'react-toastify'
 import { resetJob } from '../../redux/services/ServerStatus/server.status.slice'
+import { StatCard } from '../../components/stateCard/StateCard'
 
 const CustomGraph = lazy(
   async () => import('../../components/graph/CustomGraph'),
@@ -287,28 +288,25 @@ const Dashboard = () => {
   })
 
   return (
-    <div className="p-6 sm:ml-50 ">
+    <div className="p-6 sm:ml-50 bg-gray-50 ">
       <div className="flex flex-col gap-4 md:flex-row">
         <div className="flex-1 space-y-6 sm:w-max md:w-2/3">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
-            <div className="bg-card_bgLight rounded-lg border p-4">
-              <h3 className="text-sm font-medium text-neutral-950">
-                Total Files Scanned
-              </h3>
-              <p className="mt-4 text-xl font-bold text-primary">{20}</p>
-            </div>
-            <div className="bg-card_bgLight rounded-lg border p-4">
-              <h3 className="text-sm font-medium text-neutral-950">
-                Findings with OWASP
-              </h3>
-              <p className="mt-4 text-xl font-bold text-primary">12</p>
-            </div>
-            <div className="bg-card_bgLight rounded-lg border p-4">
-              <h3 className="text-sm font-medium text-neutral-950">
-                Findings with Mitre
-              </h3>
-              <p className="mt-4 text-xl font-bold text-primary">6</p>
-            </div>
+          <StatCard
+            label="Total Files Scanned"
+            value={20}
+            // ={TbScan}
+          />
+          <StatCard
+            label="Findings with OWASP"
+            value={12}
+       
+          />
+          <StatCard
+            label="Findings with Mitre"
+            value={6}
+   
+          />
           </div>
         </div>
       </div>
