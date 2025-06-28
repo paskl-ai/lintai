@@ -27,7 +27,7 @@ const DefaultLayout = () => {
   return (
     <>
           <PrivateHeader userInfo={{email:'Team@lint.ai'}} key={'1'} />
-      <div className="p-4">
+      <div >
         <div className="mt-14">
           <Outlet />
         </div>

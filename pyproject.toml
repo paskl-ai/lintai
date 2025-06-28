@@ -57,3 +57,4 @@ include = ["lintai*"]          # packages & sub-packages
 # include DSL rules & YAML files in wheels
 [tool.setuptools.package-data]
 "lintai.dsl" = ["*.yml", "*.yaml", "*.json"]
+"lintai.ui.frontend" = ["dist/**/*"]

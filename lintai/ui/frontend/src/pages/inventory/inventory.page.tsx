@@ -1,77 +1,123 @@
-/* ---------------------------------------------------------------------
- *  Inventory.page.tsx
- *  Re‑built with the shared <Table /> component so the inventory view
- *  matches your server‑list & new Scan table UI.
- * ------------------------------------------------------------------- */
-
-import React, { useState } from 'react'
-import {
-  FiSearch,
-  FiFolder,
-} from 'react-icons/fi'
-import { TbGraph } from 'react-icons/tb'
-import { useNavigate } from 'react-router'
-import { toast } from 'react-toastify'
+import React, { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ColumnDef, Row } from '@tanstack/react-table'
+import { ToastContainer, toast } from 'react-toastify'
+import { scanInventoryDTO, ScanService } from '../../api/services/Scan/scan.api';
+import FileSystemPage from '../filesystem/filesystem.page';
+import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo';
+import { resetJob, startJob } from '../../redux/services/ServerStatus/server.status.slice';
+import { useAppSelector } from '../../redux/services/store';
+import { useNavigate } from 'react-router';
+import { StatCard } from '../../components/stateCard/StateCard';
 
-import {
-  scanInventoryDTO,
-  ScanService,
-} from '../../api/services/Scan/scan.api'
-import CommonButton from '../../components/buttons/CommonButton'
-import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
-import FileSystemPage from '../filesystem/filesystem.page'
-import Table from '../../components/table/Table'
-import DataFlowVisualise from '../graph/DataFlowVisualise'
+// ------------------------------------------------------------------
+// MOCK DATA & SERVICES (to make the component self-contained)
+// ------------------------------------------------------------------
 
-import { QueryKey } from '../../api/QueryKey'
-import {
-  resetJob,
-  startJob,
-} from '../../redux/services/ServerStatus/server.status.slice'
-import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                             */
-/* ------------------------------------------------------------------ */
 
+const QueryKey = { JOB: 'JOB' };
+const useAppDispatch = () => (action) => console.log("Dispatching:", action);
+
+// Mocking local components
+const CommonButton = ({ children, ...props }) => <button {...props}>{children}</button>;
+
+
+// ------------------------------------------------------------------
+// ICONS & HELPERS
+// ------------------------------------------------------------------
+const FiFolder = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>;
+const FiFileText = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
+const FiChevronDown = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
+const FiChevronRight = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
+const FiSearch = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
+
+const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const strMinutes = minutes < 10 ? '0' + minutes : minutes;
+    return `${month} ${day}, ${year} ${hours}:${strMinutes} ${ampm}`;
+};
+
+
+// ------------------------------------------------------------------
+// TYPES
+// ------------------------------------------------------------------
 interface InventoryRecord {
-  sink: string             // e.g. “Postgres DB”
-  at: string               // “examples/db.py:42”
-  elements: any            // payload for graph visualiser
+  sink: string;
+  at: string;
+  date: string;
+  elements: any;
+}
+interface GroupedInventoryItem {
+  type: 'folder' | 'file';
+  name: string;
+  path: string;
+  date?: string;
+  records: InventoryRecord[];
+  children?: GroupedInventoryItem[];
+}
+// ------------------------------------------------------------------
+// HELPER COMPONENTS
+// ------------------------------------------------------------------
+
+
+const InventoryRow = ({ item, level = 0 }) => {
+    const [isExpanded, setIsExpanded] = useState(true);
+    const navigate = useNavigate();
+    const isFolder = item.type === 'folder';
+console.log(item,'inventory items in rows')
+    const handleViewScan = (e) => {
+        // e.stopPropagation();
+        // toast.info(`Navigating to inventory details for ${item.name}`);
+        navigate(`/inventory/details/${encodeURIComponent(item.path)}`, { state: item });
+    }
+
+    return (
+        <div className="text-sm">
+            <div className={`flex items-center hover:bg-gray-50 border-t border-gray-200 ${isFolder ? 'cursor-pointer' : ''}`}
+                 onClick={() => isFolder && setIsExpanded(!isExpanded)}
+            >
+                <div className="flex-1 p-2.5 flex items-center" style={{ paddingLeft: `${level * 24 + 16}px` }}>
+                     <input type="checkbox" className="mr-4" onClick={(e) => e.stopPropagation()} />
+                     {isFolder ? (
+                         isExpanded ? <FiChevronDown className="mr-2 text-gray-500"/> : <FiChevronRight className="mr-2 text-gray-500"/>
+                     ) : <div className="w-[20px] mr-2"></div>}
+                     {isFolder ? <FiFolder className="mr-2 text-blue-500"/> : <FiFileText className="mr-2 text-gray-600"/>}
+                     <span className="font-medium text-gray-800">{item.name}</span>
+                </div>
+                <div className="w-1/3 p-2.5 text-gray-600">{isFolder ? item.path : item.path.substring(0, item.path.lastIndexOf('/'))}</div>
+                <div className="w-1/4 p-2.5 text-gray-600">{formatDate(item.date)}</div>
+                <div className="w-1/6 p-2.5 text-right pr-4">
+                    {!isFolder && <button onClick={handleViewScan} className="text-blue-600 font-semibold hover:underline">View Scan</button>}
+                </div>
+            </div>
+            {isFolder && isExpanded && item.children?.map((child) => (
+                <InventoryRow key={child.path} item={child} level={level + 1} />
+            ))}
+        </div>
+    )
 }
 
-interface LLMUsage {
-  tokens_used: number
-  usd_used: number
-  requests: number
-}
-
-/* ------------------------------------------------------------------ */
-/*  Component                                                         */
-/* ------------------------------------------------------------------ */
-
+// ------------------------------------------------------------------
+// MAIN COMPONENT
+// ------------------------------------------------------------------
 const Inventory = () => {
-  const navigate = useNavigate()
-  const dispatch = useAppDispatch()
-  const queryClient = useQueryClient()
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false);
+  const configValues = useAppSelector((state) => state.config);
 
-  /* ------------------------------ Local state -------------------- */
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isFileSystemModalOpen, setIsFileSystemModalOpen] =
-    useState<boolean>(false)
-  const [networkRecord, setNetworkRecord] = useState<InventoryRecord | null>(
-    null,
-  )
-  const [isNetworkModalOpen, setIsNetworkModalOpen] =
-    useState<boolean>(false)
-
-  /* ------------------------------ Global state ------------------- */
-  const { jobId: runId, isProcessing } = useAppSelector(
-    (state) => state.serverStatus,
-  )
-  const configValues = useAppSelector((state) => state.config)
+    const { jobId: runId, isProcessing } = useAppSelector(state => state.serverStatus)
+const queryClient = useQueryClient();
+const dispatch = useAppDispatch();
 
   /* ------------------------------ Mutation ----------------------- */
   const { mutate: startScanInventory } = useMutation({
@@ -125,209 +171,123 @@ const Inventory = () => {
   })
 
   const {
-    data: lastscan,
-    isFetching: isFetchingLastScan,
+    data,
+    isFetching: isLoading,
     error: lastScanError,
   } = useQuery({
     queryKey: [QueryKey.JOB + 'last-inventory'],
-    queryFn: async () => (await ScanService.getLastResultsByType('inventory')).report,
+    queryFn: async () => (await ScanService.getLastResultsByType('inventory')),
     initialData: [],
     refetchOnWindowFocus: false,
     enabled: !scans?.data?.records,
   })
+  
 
-  /* ------------------------------ Derived data ------------------- */
-  const llmUsage: LLMUsage | undefined =
-    scans?.llm_usage || lastscan?.llm_usage
+ 
 
-  const records: InventoryRecord[] =
-    scans?.data?.records ||
-    lastscan?.data?.records ||
-    []
+  console.log(data,'data')
+  const records = data?.report?.data?.records || [];
+  const stats = data?.report?.stats || {};
 
-  const tableData: InventoryRecord[] = records.filter((rec) =>
-    `${rec.sink} ${rec.at}`.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  const handleFolderSelection = (path) => {
+    startScanInventory({ path });
+    setIsFileSystemModalOpen(false);
+  };
+  
+  const groupedAndFilteredData = useMemo(() => {
+   
 
-  if(lastScanError||scanError) {
-      dispatch(resetJob())
-      toast.dismiss()
-  }
-  /* ------------------------------ Column defs -------------------- */
-  const columns: ColumnDef<InventoryRecord>[] = [
-    { accessorKey: 'sink', header: 'Sink' },
-    {
-      accessorKey: 'at',
-      header: 'Location',
-      cell: ({ getValue }) => {
-        const loc = getValue<string>() // examples/foo.py:12
-        const [file, line] = loc.split(':')
-        return (
-          <span className="text-sm">
-            <span className="text-red-700">{file}</span>
-            <span className="text-blue-700">:</span>
-            <span className="text-green-700 font-semibold">{line}</span>
-          </span>
-        )
-      },
-    },
-    {
-      header: 'Actions',
-      cell: ({ row }) => {
-        const rec = row.original
-        return (
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded-md border border-blue-500 px-3 py-1 text-xs text-blue-500 hover:bg-blue-500 hover:text-white"
-              onClick={(e) => {
-                e.stopPropagation()
-                setNetworkRecord(rec)
-                setIsNetworkModalOpen(true)
-              }}
-            >
-              View <TbGraph className="ml-1 inline" />
-            </button>
-            <a
-              href={`vscode://file/${rec.at}`}
-              className="rounded-md border border-green-500 px-3 py-1 text-xs text-green-500 hover:bg-green-500 hover:text-white"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Edit
-            </a>
-          </div>
-        )
-      },
-    },
-  ]
-
-  /* ------------------------------ Helpers ------------------------ */
-  const handleFolderSelection = (path: string) => {
-    startScanInventory({
-      path,
-      logLevel: 'info',
-      depth: 1,
-    })
-  }
-
-  const closeNetworkModal = () => {
-    setIsNetworkModalOpen(false)
-    setNetworkRecord(null)
-  }
-
-  const handleRowClick = (row: Row<InventoryRecord>) => {
-    setNetworkRecord(row.original)
-    setIsNetworkModalOpen(true)
-  }
-
-  /* ----------------------------------------------------------------
-   *  Render
-   * -------------------------------------------------------------- */
+    const filtered = records.filter(rec =>
+      rec.at.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      rec.sink.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+    const fileMap = new Map();
+    filtered.forEach(record => {
+        const filePath = record.at.split(':')[0];
+        if (!fileMap.has(filePath)) {
+            fileMap.set(filePath, { name: filePath.split('/').pop(), path: filePath, type: 'file', records: [] });
+        }
+        fileMap.get(filePath).records.push(record);
+    });
+    const root = { children: {} };
+    Array.from(fileMap.values()).forEach(file => {
+        const pathParts = file.path.split('/');
+        let currentLevel = root.children;
+        pathParts.forEach((part, index) => {
+            const isFileNode = index === pathParts.length - 1;
+            if (isFileNode) {
+                currentLevel[part] = file;
+            } else {
+                if (!currentLevel[part]) {
+                    currentLevel[part] = { name: part, path: pathParts.slice(0, index + 1).join('/'), type: 'folder', children: {} };
+                }
+                currentLevel = currentLevel[part].children;
+            }
+        });
+    });
+    const toArray = (nodes) => Object.values(nodes).map(node => ({ ...node, children: node.children ? toArray(node.children) : undefined }));
+    return toArray(root.children);
+  }, [records, searchQuery]);
 
   return (
-    <div className="flex p-6 sm:ml-50">
-      <main className="flex-1">
-        {/* Top bar */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h3 className="text-lg font-bold text-gray-700">Scan Inventory</h3>
-
-          <div className="flex items-center gap-2">
-            <ConfigurationInfo />
-{/*
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-2.5 text-gray-500" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search…"
-                className="w-64 rounded border py-2 pl-10 pr-4"
-              />
-            </div> */}
-
-            <CommonButton
-              loading={isProcessing}
-              onClick={() => setIsFileSystemModalOpen(true)}
-              className="flex items-center bg-primary px-4 py-2 text-white"
-            >
-              <FiFolder className="mr-2" />
-              Run scan
-            </CommonButton>
-          </div>
+    <div className="bg-gray-50 min-h-screen p-6 sm:ml-50" >
+        <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false}/>
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">Inventory</h1>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard label="Total Files Scanned" value={stats.totalFiles || 0} mainStyle />
+            <StatCard label="Components" value={stats.components || 0} />
+            <StatCard label="Sinks" value={stats.sinks || 0} />
+            <StatCard label="AI Calls" value={stats.aiCalls || 0} />
         </div>
 
-        {/* File‑system picker modal */}
-        {isFileSystemModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="h-3/4 w-3/4 overflow-hidden rounded-lg bg-white shadow-lg">
-              <FileSystemPage
-                startLocation={configValues?.config?.sourcePath}
-                setIsModalOpen={setIsFileSystemModalOpen}
-                handleScan={handleFolderSelection}
-              />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                <div className="relative w-full max-w-xs">
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="text" placeholder="Search here..." value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)}
+                           className="pl-10 pr-4 py-2 w-full text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"/>
+                </div>
+                <div className="flex items-center gap-2">
+                    <CommonButton onClick={() => setIsFileSystemModalOpen(true)}
+                                  loading={isProcessing} disabled={isProcessing}
+                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center shadow-sm hover:bg-blue-700 transition-colors disabled:bg-blue-300">
+                        Scan for Inventory
+                    </CommonButton>
+                    <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Actions</button>
+                    <ConfigurationInfo />
+                </div>
             </div>
-          </div>
-        )}
 
-        {/* LLM stats */}
-        {llmUsage && (
-          <div className="mb-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Tokens used" value={llmUsage.tokens_used} />
-            <StatCard
-              label="Total Cost"
-              value={`$${llmUsage.usd_used.toFixed(2)}`}
-            />
-            <StatCard label="LLM Requests" value={llmUsage.requests} />
-          </div>
-        )}
-
-        {/* Inventory table */}
-        <Table
-        //   loading={isFetchingScan || isFetchingLastScan}
-          data={tableData}
-          columns={columns}
-
-        //   handleRowClick={handleRowClick}
-        //   pageSize={10}
-        //   enableSorting
-        />
-
-        {/* Graph modal */}
-        {isNetworkModalOpen && networkRecord && (
-          <div className="fixed inset-0 z-50 flex justify-end">
-            <div className="h-full w-2/4 bg-white shadow-lg">
-              <div className="flex items-center justify-between border-b p-4">
-                <h2 className="text-lg font-semibold">
-                  Data Flow Visualisation
-                </h2>
-                <button
-                  onClick={closeNetworkModal}
-                  className="rounded bg-primary px-4 py-2 text-white hover:bg-primary/80"
-                >
-                  Close
-                </button>
+            {isFileSystemModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setIsFileSystemModalOpen(false)}>
+                <div className="h-3/4 w-1/2 overflow-hidden rounded-lg bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+                  <FileSystemPage setIsModalOpen={setIsFileSystemModalOpen} handleScan={handleFolderSelection}/>
+                </div>
               </div>
-              <div className="h-full overflow-y-auto p-4">
-                <DataFlowVisualise records={networkRecord} />
-              </div>
+            )}
+            
+            {/* Table Header */}
+            <div className="flex items-center bg-gray-50 text-xs text-gray-500 uppercase font-medium border-b border-gray-200">
+                <div className="flex-1 p-2.5 flex items-center pl-4"><input type="checkbox" className="mr-4" /> File / Folder Scanned for Inventory</div>
+                <div className="w-1/3 p-2.5">Location</div>
+                <div className="w-1/4 p-2.5">Date Scanned</div>
+                <div className="w-1/6 p-2.5 text-right pr-4">Action</div>
             </div>
-          </div>
-        )}
-      </main>
+
+            {isLoading ? <p className="p-4 text-center text-gray-500">Loading inventory...</p> : (
+                groupedAndFilteredData.length > 0 ? (
+                     groupedAndFilteredData.map((item) => <InventoryRow key={item.path} item={item} />)
+                ) : (
+                    <div className="text-center py-16 text-gray-500">
+                        <p className="font-semibold">No Inventory Found</p>
+                        <p className="text-sm mt-1">Run a scan to build your inventory.</p>
+                    </div>
+                )
+            )}
+        </div>
     </div>
   )
 }
 
-/* ------------------------------ Helper --------------------------- */
-const StatCard = ({
-  label,
-  value,
-}: {
-  label: string
-  value: number | string
-}) => (
-  <div className="rounded-lg border-2 border-neutral-100 bg-card_bgLight p-4">
-    <h3 className="text-lg font-semibold text-gray-800">{label}</h3>
-    <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
-  </div>
-)
-
-export default Inventory
+export default Inventory;

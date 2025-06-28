@@ -26,7 +26,7 @@ class PythonASTUnit(SourceUnit):
         "is_ai_module",
     )
 
-    def __init__(self, path: Path, text: str):
+    def __init__(self, path: Path, text: str, project_root: Path):
         super().__init__(path)
         self.source = text
         self.tree = ast.parse(text, filename=str(path))
@@ -35,6 +35,14 @@ class PythonASTUnit(SourceUnit):
                 setattr(child, "parent", parent)
                 # let helpers (is_ai_call) reach the tracker for this module
                 setattr(child, "_unit", self)
+        
+        # --- NEW LOGIC for cleaner module names ---
+        try:
+            relative_path = path.relative_to(project_root)
+            self.modname = ".".join(relative_path.with_suffix("").parts)
+        except ValueError:
+            # Fallback for paths outside the project root (like the test temp file)
+            self.modname = ".".join(path.with_suffix("").parts[-2:])
 
         self._current = None
         self._call_nodes = None  # lazy build

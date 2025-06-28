@@ -15,11 +15,12 @@ import re
 import textwrap
 from typing import Optional
 
-from lintai.engine.ai_call_analysis import ProjectAnalyzer
+from lintai.engine.analysis import ProjectAnalyzer
 from lintai.core.finding import Finding
 from lintai.detectors import register
 from lintai.llm import get_client
-from lintai.engine.ai_call_analysis import is_ai_call
+from lintai.engine.classification import is_ai_related as is_ai_call
+from lintai.engine.ast_utils import get_full_attr_name
 
 logger = logging.getLogger(__name__)
 _CLIENT = get_client()  # dummy stub if provider missing
@@ -275,7 +276,13 @@ def _is_trivial_wrapper(
 def llm_audit(unit):
     call = unit._current
 
-    if not is_ai_call(call):
+    call_name = ""
+    if isinstance(call.func, ast.Name):
+        call_name = call.func.id
+    elif isinstance(call.func, ast.Attribute):
+        call_name = get_full_attr_name(call.func)
+
+    if not call_name or not is_ai_call(call_name):
         return
 
     if getattr(_CLIENT, "is_dummy", False):
