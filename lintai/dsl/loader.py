@@ -3,7 +3,7 @@ import ast, json, yaml, pathlib, re, logging
 from lintai.detectors import register
 from lintai.core.finding import Finding
 from lintai.detectors.base import SourceUnit
-from lintai.engine.ai_call_analysis import is_ai_call
+from lintai.engine.classification import is_ai_related as is_ai_call
 
 logger = logging.getLogger(__name__)
 
@@ -40,20 +40,6 @@ def _load_one(rule: dict):
     @register(nid, scope=scope, node_types=node_types)
     def _generated(unit: SourceUnit, _r=rule, _cre=compiled_re):
         node = unit._current  # set by the dispatcher
-
-        # ── 1️⃣  global gating ───────────────────────────────────────────────
-        if scope == "module":
-            if not getattr(unit, "is_ai_module", False):
-                return
-        elif scope == "node":
-            if any(issubclass(t, ast.Call) for t in node_types):
-                # this rule cares only about actual AI calls
-                if not is_ai_call(node):  # <-- import from ai_call_analysis
-                    return
-            else:
-                # non-Call nodes → respect file-level gating
-                if not getattr(unit, "is_ai_module", False):
-                    return
 
         # ── 2️⃣  (optional) debug log ────────────────────────────────────────
         logger.debug(
