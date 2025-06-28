@@ -166,5 +166,23 @@ Auto-generated OpenAPI docs live at **`/api/docs`**.
 4. Open a PR – or a draft PR early
 5. See `CONTRIBUTING.md`
 
+### 🎨 Frontend Development
+
+The UI is a React/TypeScript application. For development:
+
+```bash
+# Frontend development
+cd lintai/ui/frontend
+npm install
+npm run dev    # Start dev server
+
+# Build for production (development only)
+python scripts/build-frontend.py
+```
+
+**Note**: Built frontend assets are not committed to git. They are built automatically during CI/CD for releases.
+
+---
+
 Created by **Harsh Parandekar** — [LinkedIn](https://linkedin.com/in/hparandekar)
 Licensed under **Apache 2.0**
