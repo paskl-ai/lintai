@@ -35,7 +35,7 @@ class PythonASTUnit(SourceUnit):
                 setattr(child, "parent", parent)
                 # let helpers (is_ai_call) reach the tracker for this module
                 setattr(child, "_unit", self)
-        
+
         # --- NEW LOGIC for cleaner module names ---
         try:
             relative_path = path.relative_to(project_root)

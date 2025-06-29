@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 
+
 # Renaming the test to reflect its new purpose
 def test_secret_in_prompt_finding(tmp_path):
     """
@@ -39,7 +40,7 @@ def test_secret_in_prompt_finding(tmp_path):
 
     # The test should now produce findings
     assert result.stdout, f"Empty stdout: stderr={result.stderr!r}"
-    
+
     try:
         result_obj = json.loads(result.stdout)
         findings = result_obj["findings"]

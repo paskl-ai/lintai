@@ -6,20 +6,41 @@ import ast
 # Using the more comprehensive regex from your original ai_tags.py
 PROVIDER_RX = re.compile(
     r"\b(openai|anthropic|google|ai21|cohere|mistral|ollama|llama_index|langchain|autogen|crewai|dspy|semantic_kernel|haystack)\b",
-    re.I
+    re.I,
 )
 
 VERB_RX = re.compile(
     r"\b(chat|complete|generate|predict|invoke|run|call|ask|stream|embed|encode|transform|summarize|agent)\b",
-    re.I
+    re.I,
 )
 
 # A simple list of known non-component noise to filter out
-NOISE_KEYWORDS = {"str", "int", "float", "len", "print", "list", "set", "type", "enumerate", "zip", "range", "dict", "open"}
+NOISE_KEYWORDS = {
+    "str",
+    "int",
+    "float",
+    "len",
+    "print",
+    "list",
+    "set",
+    "type",
+    "enumerate",
+    "zip",
+    "range",
+    "dict",
+    "open",
+}
 
 # Expanded based on your document and original code
 FRAMEWORK_SIGNATURES = {
-    "LangChain": {"imports": ["langchain", "langchain_core", "langchain_openai", "langchain_community"]},
+    "LangChain": {
+        "imports": [
+            "langchain",
+            "langchain_core",
+            "langchain_openai",
+            "langchain_community",
+        ]
+    },
     "LlamaIndex": {"imports": ["llama_index"]},
     "AutoGen": {"imports": ["autogen", "autogen_agentchat", "autogen_ext"]},
     "CrewAI": {"imports": ["crewai"]},
@@ -30,15 +51,72 @@ FRAMEWORK_SIGNATURES = {
 
 # Greatly expanded classifier based on your document
 COMPONENT_CLASSIFIER = {
-    "LLM": ["ChatOpenAI", "OpenAI", "Anthropic", "Cohere", "Bedrock", "ChatCompletion", "LLM", "Gemini", "PaLM", "AzureChatOpenAI", "OpenAIChatCompletionClient"],
+    "LLM": [
+        "ChatOpenAI",
+        "OpenAI",
+        "Anthropic",
+        "Cohere",
+        "Bedrock",
+        "ChatCompletion",
+        "LLM",
+        "Gemini",
+        "PaLM",
+        "AzureChatOpenAI",
+        "OpenAIChatCompletionClient",
+    ],
     "Prompt": ["PromptTemplate", "ChatPromptTemplate", "Prompt", "guidance"],
-    "Agent": ["Agent", "AgentExecutor", "create_react_agent", "ConversableAgent", "AssistantAgent", "UserProxyAgent"],
-    "Tool": ["Tool", "python_repl", "requests_get", "DuckDuckGoSearchRun", "SerpAPI", "MultimodalWebSurfer", "Function"],
-    "Chain": ["Chain", "LCEL", "Runnable", "workflow", "task_graph", "invoke", "batch", "stream"],
-    "VectorDB": ["VectorStore", "Chroma", "FAISS", "Pinecone", "Weaviate", "Qdrant", "Milvus", "Redis"],
-    "Retriever": ["Retriever", "MultiVectorRetriever", "VectorStoreRetriever", "similarity_search"],
+    "Agent": [
+        "Agent",
+        "AgentExecutor",
+        "create_react_agent",
+        "ConversableAgent",
+        "AssistantAgent",
+        "UserProxyAgent",
+    ],
+    "Tool": [
+        "Tool",
+        "python_repl",
+        "requests_get",
+        "DuckDuckGoSearchRun",
+        "SerpAPI",
+        "MultimodalWebSurfer",
+        "Function",
+    ],
+    "Chain": [
+        "Chain",
+        "LCEL",
+        "Runnable",
+        "workflow",
+        "task_graph",
+        "invoke",
+        "batch",
+        "stream",
+    ],
+    "VectorDB": [
+        "VectorStore",
+        "Chroma",
+        "FAISS",
+        "Pinecone",
+        "Weaviate",
+        "Qdrant",
+        "Milvus",
+        "Redis",
+    ],
+    "Retriever": [
+        "Retriever",
+        "MultiVectorRetriever",
+        "VectorStoreRetriever",
+        "similarity_search",
+    ],
     "Embedding": ["Embeddings", "OpenAIEmbeddings", "SentenceTransformer"],
-    "DocumentLoader": ["Loader", "PDFLoader", "TextLoader", "UnstructuredLoader", "SimpleDirectoryReader", "partition_pdf"],
+    "DocumentLoader": [
+        "Loader",
+        "PDFLoader",
+        "TextLoader",
+        "UnstructuredLoader",
+        "SimpleDirectoryReader",
+        "partition_pdf",
+    ],
     "TextSplitter": ["TextSplitter", "RecursiveCharacterTextSplitter"],
     "Memory": ["Memory", "ConversationBufferMemory", "VectorStoreRetrieverMemory"],
     "Parser": ["StrOutputParser", "OutputParser"],
@@ -49,11 +127,13 @@ COMPONENT_CLASSIFIER = {
     "Lifecycle": [".close"],
 }
 
+
 def is_ai_related(name: str) -> bool:
     """Check if a function/class name is likely AI-related using regex."""
     if not name:
         return False
     return bool(PROVIDER_RX.search(name) or VERB_RX.search(name))
+
 
 def classify_component_type(name: str) -> str:
     """Classifies a component name into a detailed type, ignoring known noise."""
@@ -65,11 +145,12 @@ def classify_component_type(name: str) -> str:
         for keyword in keywords:
             if keyword.lower() in name.lower():
                 return comp_type
-    
+
     if is_ai_related(name):
         return "GenericAI"
 
     return "Unknown"
+
 
 def detect_frameworks(tree: ast.AST) -> list[str]:
     """Detects frameworks from import statements."""
@@ -81,14 +162,14 @@ def detect_frameworks(tree: ast.AST) -> list[str]:
                 imports.add(alias.name)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module)
-            
+
     for fw, sig in FRAMEWORK_SIGNATURES.items():
         for lib in sig["imports"]:
             for imp in imports:
-                if imp == lib or imp.startswith(lib + '.'):
+                if imp == lib or imp.startswith(lib + "."):
                     detected.add(fw)
                     break
             if fw in detected:
                 break
-            
+
     return list(detected)

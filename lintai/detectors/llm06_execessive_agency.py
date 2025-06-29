@@ -16,6 +16,7 @@ DANGEROUS_CALLS = {
     "shutil.move",
 }
 
+
 @register("LLM06", scope="module")
 def detect_excessive_agency(unit):
     """
@@ -24,6 +25,7 @@ def detect_excessive_agency(unit):
     """
     # This requires the global analyzer to have run first.
     from lintai.engine import ai_analyzer
+
     if not ai_analyzer:
         return
 
@@ -35,7 +37,7 @@ def detect_excessive_agency(unit):
     tool_components = [c for c in inventory.components if c.component_type == "Tool"]
     if not tool_components:
         return
-    
+
     # For each Tool, get its original AST node from the analyzer
     for tool_comp in tool_components:
         tool_node = ai_analyzer._qualname_to_node.get(tool_comp.name)
@@ -45,7 +47,7 @@ def detect_excessive_agency(unit):
             for sub_node in ast.walk(tool_node):
                 if isinstance(sub_node, ast.Call):
                     call_name = get_full_attr_name(sub_node.func)
-                    
+
                     if call_name in DANGEROUS_CALLS:
                         yield Finding(
                             detector_id="LLM06_EXCESSIVE_AGENCY",
@@ -55,5 +57,5 @@ def detect_excessive_agency(unit):
                             message=f"Agent tool '{tool_comp.name}' has excessive agency via a call to dangerous function '{call_name}'.",
                             location=unit.path,
                             line=sub_node.lineno,
-                            fix="Ensure agent tools are sandboxed and cannot execute arbitrary system commands. Use safer, more specific APIs instead of general-purpose execution."
+                            fix="Ensure agent tools are sandboxed and cannot execute arbitrary system commands. Use safer, more specific APIs instead of general-purpose execution.",
                         )

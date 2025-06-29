@@ -5,13 +5,16 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain import hub
 
+
 # This tool is dangerous because it can execute any shell command.
 @tool
 def execute_shell_command(command: str) -> str:
     """Executes a shell command."""
     import os
+
     # This is the dangerous call we want to detect.
     return os.system(command)
+
 
 # Standard agent setup that uses the dangerous tool
 prompt = hub.pull("hwchase17/react")
