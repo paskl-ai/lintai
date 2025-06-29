@@ -130,38 +130,98 @@ def create_graph_payload(
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Converts the inventories into a Cytoscape.js-compatible graph format.
+    Includes all function/component nodes that call into AI components, and all AI components themselves.
+    Only includes 'calls' edges where the callee is an AI component.
+    Optimized for performance using flat maps.
     """
+    AI_TYPES = {
+        "LLM",
+        "Prompt",
+        "Chain",
+        "Tool",
+        "Agent",
+        "MultiAgent",
+        "Memory",
+        "VectorDB",
+        "Retriever",
+        "Parser",
+        "GenericAI",
+        "UI",
+        "Lifecycle",
+        "DocumentLoader",
+    }
     nodes = []
     edges = []
     seen_nodes = set()
+    component_id_map = {}
+    ai_component_names = set()
+    all_components = {}
 
+    # Build a flat map of all components for fast lookup
     for inventory in inventories:
         for comp in inventory.components:
-            node_id = f"{comp.name}:{comp.location}:{comp.component_type}"  # Composite key for uniqueness
-            if node_id not in seen_nodes:
-                nodes.append(
-                    {
-                        "data": {
-                            "id": node_id,
-                            "label": comp.name,
-                            "type": comp.component_type,
-                            "file": inventory.file_path,
-                        }
-                    }
-                )
-                seen_nodes.add(node_id)
+            node_id = f"{comp.name}:{comp.location}:{comp.component_type}"
+            component_id_map[comp.name] = node_id
+            all_components[comp.name] = comp
+            if comp.component_type in AI_TYPES:
+                ai_component_names.add(comp.name)
 
-            # Add edges from the relationships
-            if "uses" in comp.relationships:
-                for target_name in comp.relationships["uses"]:
-                    # This requires a lookup to find the target's location/ID
-                    # This logic can be enhanced later for cross-file resolution
+    # Add all AI components as nodes
+    for name in ai_component_names:
+        comp = all_components[name]
+        node_id = component_id_map[name]
+        if node_id not in seen_nodes:
+            nodes.append(
+                {
+                    "data": {
+                        "id": node_id,
+                        "label": comp.name,
+                        "type": comp.component_type,
+                        "file": (
+                            comp.location.split(":")[0]
+                            if ":" in comp.location
+                            else "unknown"
+                        ),
+                    }
+                }
+            )
+            seen_nodes.add(node_id)
+
+    # Add all callers of AI components as nodes
+    for comp in all_components.values():
+        node_id = component_id_map[comp.name]
+        for rel in comp.relationships:
+            if rel.type == "calls" and rel.target_name in ai_component_names:
+                if node_id not in seen_nodes:
+                    nodes.append(
+                        {
+                            "data": {
+                                "id": node_id,
+                                "label": comp.name,
+                                "type": comp.component_type,
+                                "file": (
+                                    comp.location.split(":")[0]
+                                    if ":" in comp.location
+                                    else "unknown"
+                                ),
+                            }
+                        }
+                    )
+                    seen_nodes.add(node_id)
+
+    # Add 'calls' edges where the callee is an AI component
+    for comp in all_components.values():
+        source_id = component_id_map[comp.name]
+        for rel in comp.relationships:
+            if rel.type == "calls" and rel.target_name in ai_component_names:
+                target_id = component_id_map.get(rel.target_name)
+                if source_id and target_id:
                     edges.append(
                         {
                             "data": {
-                                "source": node_id,
-                                "target": target_name,  # Simplified for now
-                                "label": "uses",
+                                "source": source_id,
+                                "target": target_id,
+                                "label": rel.type,
                             }
                         }
                     )

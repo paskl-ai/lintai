@@ -31,6 +31,7 @@ class ProjectAnalyzer:
             self._track_imports_and_defs(unit.tree, unit)
 
         # === Pass 2: Create Components and Map Relationships ===
+        self._component_map = {}  # name -> component (for deduplication/merging)
         for unit in self.units:
             inventory = FileInventory(
                 file_path=str(unit.path),
@@ -41,8 +42,35 @@ class ProjectAnalyzer:
             for node in ast.walk(unit.tree):
                 component = self._node_to_component(node, unit)
                 if component:
-                    inventory.add_component(component)
-                    self._map_relationships(component, node, unit)
+                    # Deduplication: if a component with this name exists, merge/replace as needed
+                    existing = self._component_map.get(component.name)
+                    if existing:
+                        # Prefer real location/code_snippet over stub
+                        if (
+                            existing.location == "unknown" or not existing.code_snippet
+                        ) and (
+                            component.location != "unknown" and component.code_snippet
+                        ):
+                            existing.location = component.location
+                            existing.code_snippet = component.code_snippet
+                            existing.component_type = component.component_type
+                        # Always merge call_chain and relationships
+                        existing.call_chain = list(
+                            set(existing.call_chain + component.call_chain)
+                        )
+                        existing.relationships.extend(
+                            [
+                                r
+                                for r in component.relationships
+                                if r not in existing.relationships
+                            ]
+                        )
+                    else:
+                        inventory.add_component(component)
+                        self._component_map[component.name] = component
+                    self._map_relationships(
+                        self._component_map[component.name], node, unit
+                    )
 
         # === Pass 3: Populate Call Chains from Graph ===
         for inventory in self.inventories.values():
@@ -118,12 +146,54 @@ class ProjectAnalyzer:
                         sub_node.func, unit
                     )
                     if callee_qualname:
-                        # Check if the callee is a known function definition before adding the edge
-                        if self._call_graph.has_node(callee_qualname):
-                            self._call_graph.add_edge(component.name, callee_qualname)
-                            component.relationships.append(
-                                Relationship(target_name=callee_qualname, type="calls")
+                        if not self._call_graph.has_node(callee_qualname):
+                            self._call_graph.add_node(callee_qualname)
+                        self._call_graph.add_edge(component.name, callee_qualname)
+                        component.relationships.append(
+                            Relationship(target_name=callee_qualname, type="calls")
+                        )
+                        # Deduplication/merging logic using flat map
+                        found = self._component_map.get(callee_qualname)
+                        callee_type = (
+                            "LLM"
+                            if "." in callee_qualname
+                            and (
+                                "openai" in callee_qualname
+                                or "anthropic" in callee_qualname
+                                or "cohere" in callee_qualname
+                                or "azure" in callee_qualname
+                                or "gemini" in callee_qualname
                             )
+                            else "Function"
+                        )
+                        if not found:
+                            stub_component = Component(
+                                name=callee_qualname,
+                                component_type=callee_type,
+                                location="unknown",
+                                code_snippet=None,
+                            )
+                            self._component_map[callee_qualname] = stub_component
+                            # Add to the first inventory (or create a new one if needed)
+                            list(self.inventories.values())[0].add_component(
+                                stub_component
+                            )
+                        else:
+                            # If a stub exists and a real node is found later, update the stub
+                            if (
+                                found.location == "unknown"
+                                or found.code_snippet is None
+                            ):
+                                for comp2 in self._component_map.values():
+                                    if (
+                                        comp2.name == callee_qualname
+                                        and comp2.location != "unknown"
+                                        and comp2.code_snippet
+                                    ):
+                                        found.location = comp2.location
+                                        found.code_snippet = comp2.code_snippet
+                                        found.component_type = comp2.component_type
+                                        break
 
             # 2. Find "uses" relationships for the function's parameters (the new logic)
             for arg in node.args.args:
