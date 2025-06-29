@@ -12,10 +12,14 @@
 
 ## ✨ Key features
 
-- **Two analysis commands**
-  - `lintai ai-inventory <src-code-path>` – list every AI call and its caller chain
-  - `lintai scan <src-code-path>` – run all detectors, emit JSON (with _llm_usage_ summary)
+- **Two analysis commands with multi-file support**
+  - `lintai ai-inventory <files-or-dirs>...` – list every AI call and its caller chain across multiple files
+  - `lintai scan <files-or-dirs>...` – run all detectors on multiple files/directories, emit JSON (with _llm_usage_ summary)
+- **Cross-file analysis** – tracks function calls and AI usage patterns across file boundaries
 - **LLM budget guard-rails** – hard caps on requests / tokens / cost (`LINTAI_MAX_LLM_*`)
+- **Enhanced call-flow context** – LLM detectors receive caller/callee context from other files for better analysis
+- **OWASP LLM Top-10 detectors** – including LLM01 (Prompt Injection), LLM02 (Data Leakage), LLM06 (Excessive Agency)
+- **Multi-framework support** – OpenAI, Anthropic, LangChain, CrewAI, AutoGen, and more
 - Modular detector registry (`entry_points`)
 - OWASP LLM Top-10 & MITRE ATT&CK baked in
 - DSL for custom rules
@@ -61,8 +65,16 @@ Lintai auto-loads `.env`; the UI writes the same file, so CLI & browser stay in 
 ### 3 · Run
 
 ```bash
+# Single file or directory
 lintai ai-inventory src/ --ai-call-depth 4
 lintai scan src/
+
+# Multiple files and directories
+lintai scan file1.py file2.py src/ tests/
+lintai ai-inventory examples/main.py examples/chatbot.py --graph
+
+# Mixed arguments work too
+lintai scan examples/main.py examples/agents/ --output report.json
 ```
 
 ### 4 · Launch REST server (Optional, React UI coming soon)
@@ -75,7 +87,12 @@ lintai ui                     # REST docs at http://localhost:8501/api/docs
 
 ## 🔬 How LLM detectors work
 
-LLM-powered rules collect the **full source** of functions that call AI frameworks, plus their caller chain, and ask an external LLM to classify OWASP risks.
+LLM-powered rules collect the **full source** of functions that call AI frameworks, plus their caller chain **across multiple files**, and ask an external LLM to classify OWASP risks.
+
+The enhanced analysis includes:
+- **Cross-file call tracking** – detectors see how functions in one file call AI functions in another
+- **Caller context** – LLM prompts include snippets from calling functions to provide better security analysis
+- **Call-flow context** – both direct callers and callees are included for comprehensive risk assessment
 
 Budget checks run _before_ the call; actual usage is recorded afterwards.
 
@@ -83,11 +100,13 @@ Budget checks run _before_ the call; actual usage is recorded afterwards.
 
 ## 🔧 Common flags
 
-| Flag              | Description                              |
-| ----------------- | ---------------------------------------- |
-| `-l DEBUG`        | Verbose logging                          |
-| `--ruleset <dir>` | Load custom YAML/JSON rules              |
-| `--output <file>` | Write full JSON report instead of stdout |
+| Flag              | Description                                        |
+| ----------------- | -------------------------------------------------- |
+| `-l DEBUG`        | Verbose logging                                    |
+| `--ruleset <dir>` | Load custom YAML/JSON rules                       |
+| `--output <file>` | Write full JSON report instead of stdout          |
+| `--graph`         | Include call-graph visualization data (ai-inventory) |
+| `--ai-call-depth` | How many caller layers to trace for relationships |
 
 ---
 
@@ -181,6 +200,14 @@ python scripts/build-frontend.py
 ```
 
 **Note**: Built frontend assets are not committed to git. They are built automatically during CI/CD for releases.
+
+---
+
+## 👥 Contributors
+
+- **Harsh Parandekar** ([@hparandekar](https://github.com/hparandekar)) - Creator, core engine, multi-file analysis
+- **Hitesh Kapoor** ([@hkapoor246](https://github.com/hkapoor246)) - Analysis engine rewrite, LLM06 & LLM02 detectors
+- **Kundan Ray** ([@kundanray1](https://github.com/kundanray1)) - React UI development and dashboard enhancements
 
 ---
 
