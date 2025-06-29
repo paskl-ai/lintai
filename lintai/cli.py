@@ -38,7 +38,7 @@ app = typer.Typer(
 def _bootstrap(
     ctx: Context,
     *,
-    path: Path,
+    paths: List[Path],
     env_file: Path | None,
     log_level: str,
     ai_call_depth: int,
@@ -52,7 +52,7 @@ def _bootstrap(
 
     init_common(
         ctx,
-        path=path,
+        paths=paths,
         env_file=env_file,
         log_level=log_level,
         ai_call_depth=ai_call_depth,
@@ -81,9 +81,7 @@ def top_callback(
 @app.command("scan", help="Run all detectors and emit findings JSON.")
 def scan_cmd(
     ctx: Context,
-    path: Path = Argument(
-        ..., exists=True, readable=True, help="File or directory to analyse"
-    ),
+    paths: List[Path] = Argument(..., help="Files or directories to analyse"),
     ruleset: Path | None = Option(
         None, "--ruleset", "-r", help="Custom rule file/folder"
     ),
@@ -101,7 +99,7 @@ def scan_cmd(
 ):
     _bootstrap(
         ctx,
-        path=path,
+        paths=paths,
         env_file=env_file,
         log_level=log_level,
         ai_call_depth=ai_call_depth,
@@ -113,8 +111,9 @@ def scan_cmd(
     for u in units:
         findings.extend(run_all(u))
 
-    # Save full report with LLM usage
-    report_data = report.make_scan_report(findings, str(path))
+    # Save full report with LLM usage - use first path for report name
+    path_for_report = str(paths[0]) if paths else "unknown"
+    report_data = report.make_scan_report(findings, path_for_report)
     report.write_report_obj(report_data, output)
 
     if output:
@@ -130,8 +129,8 @@ def create_graph_payload(
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Converts the inventories into a Cytoscape.js-compatible graph format.
-    Includes all function/component nodes that call into AI components, and all AI components themselves.
-    Only includes 'calls' edges where the callee is an AI component.
+    Includes all function/component nodes and their call relationships.
+    Shows complete call chains: function → function → AI component.
     Optimized for performance using flat maps.
     Canonicalizes AI/LLM nodes so all edges point to a single node per AI/LLM component.
     """
@@ -212,12 +211,63 @@ def create_graph_payload(
                     )
                     seen_nodes.add(node_id)
 
-    # Add 'calls' edges where the callee is an AI component, always using canonical target
+    # Add all function components that have "calls" relationships as nodes
+    for comp in all_components.values():
+        node_id = component_id_map[comp.name]
+        has_calls = any(rel.type == "calls" for rel in comp.relationships)
+        if has_calls and node_id not in seen_nodes:
+            nodes.append(
+                {
+                    "data": {
+                        "id": node_id,
+                        "label": comp.name,
+                        "type": comp.component_type,
+                        "file": (
+                            comp.location.split(":")[0]
+                            if ":" in comp.location
+                            else "unknown"
+                        ),
+                    }
+                }
+            )
+            seen_nodes.add(node_id)
+
+    # Add target functions that are called by other functions as nodes
+    for comp in all_components.values():
+        for rel in comp.relationships:
+            if rel.type == "calls" and rel.target_name in all_components:
+                target_comp = all_components[rel.target_name]
+                target_node_id = component_id_map[rel.target_name]
+                if target_node_id not in seen_nodes:
+                    nodes.append(
+                        {
+                            "data": {
+                                "id": target_node_id,
+                                "label": target_comp.name,
+                                "type": target_comp.component_type,
+                                "file": (
+                                    target_comp.location.split(":")[0]
+                                    if ":" in target_comp.location
+                                    else "unknown"
+                                ),
+                            }
+                        }
+                    )
+                    seen_nodes.add(target_node_id)
+
+    # Add ALL 'calls' edges: function→function and function→AI component
     for comp in all_components.values():
         source_id = component_id_map[comp.name]
         for rel in comp.relationships:
-            if rel.type == "calls" and rel.target_name in ai_component_names:
-                target_id = llm_canonical_id_map.get(rel.target_name)
+            if rel.type == "calls":
+                target_id = None
+                # Check if target is an AI component (use canonical ID)
+                if rel.target_name in ai_component_names:
+                    target_id = llm_canonical_id_map.get(rel.target_name)
+                # Check if target is a regular function component
+                elif rel.target_name in all_components:
+                    target_id = component_id_map[rel.target_name]
+
                 if source_id and target_id:
                     edges.append(
                         {
@@ -237,9 +287,7 @@ def create_graph_payload(
 @app.command("ai-inventory", help="Emit a unified JSON inventory of all AI components.")
 def ai_inventory_cmd(
     ctx: Context,
-    path: Path = Argument(
-        ..., exists=True, readable=True, help="File or directory to analyse"
-    ),
+    paths: List[Path] = Argument(..., help="Files or directories to analyse"),
     ruleset: Path = Option(None, "--ruleset", "-r", help="Custom rule file/folder"),
     env_file: Path = Option(None, "--env-file", "-e", help="Optional .env"),
     log_level: str = Option("INFO", "--log-level", "-l", help="Logging level"),
@@ -265,7 +313,7 @@ def ai_inventory_cmd(
     """
     _bootstrap(
         ctx,
-        path=path,
+        paths=paths,
         env_file=env_file,
         log_level=log_level,
         ai_call_depth=ai_call_depth,
@@ -314,7 +362,7 @@ def ui_cmd(
     # Initialize logging with the specified level
     init_common(
         ctx,
-        path=Path.cwd(),  # dummy path for UI
+        paths=[Path.cwd()],  # dummy path for UI
         env_file=None,
         log_level=log_level,
         ai_call_depth=1,  # dummy depth for UI

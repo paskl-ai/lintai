@@ -126,19 +126,29 @@ def _path_context(unit, func_node: ast.AST, max_funcs: int = 3) -> str:
             return ""
 
         qname = unit.qualname(func_node)  # PythonASTUnit helper
+
         callers = list(ai_analyzer.callers_of(qname))[:max_funcs]
+
         callers_src = []
         for name in callers:
-            src_unit, node = ai_analyzer.source_of(name)  # (PythonASTUnit, ast.AST)
-            callers_src.append(_snippet(node, src_unit.source))
+            try:
+                src_unit, node = ai_analyzer.source_of(name)  # (PythonASTUnit, ast.AST)
+                callers_src.append(_snippet(node, src_unit.source))
+            except Exception as e:
+                logger.debug(f"llm_code_audit: skipping caller {name} - no source: {e}")
 
         san_callees = set()
         san_callee_blocks = []
         for name in ai_analyzer.callees_of(qname):
             if any(fn in name for fn in _SANITIZERS) or _SANITIZER_RE.search(name):
-                src_unit, node = ai_analyzer.source_of(name)
-                san_callees.add(name)
-                san_callee_blocks.append(_snippet(node, src_unit.source))
+                try:
+                    src_unit, node = ai_analyzer.source_of(name)
+                    san_callees.add(name)
+                    san_callee_blocks.append(_snippet(node, src_unit.source))
+                except Exception as e:
+                    logger.debug(
+                        f"llm_code_audit: skipping sanitizer callee {name} - no source: {e}"
+                    )
 
         other_callees = [
             c for c in ai_analyzer.callees_of(qname) if c not in san_callees
@@ -146,8 +156,11 @@ def _path_context(unit, func_node: ast.AST, max_funcs: int = 3) -> str:
 
         callees_src = san_callee_blocks
         for name in other_callees:
-            src_unit, node = ai_analyzer.source_of(name)
-            callees_src.append(_snippet(node, src_unit.source))
+            try:
+                src_unit, node = ai_analyzer.source_of(name)
+                callees_src.append(_snippet(node, src_unit.source))
+            except Exception as e:
+                logger.debug(f"llm_code_audit: skipping callee {name} - no source: {e}")
 
         if not callers_src and not callees_src:
             return ""
