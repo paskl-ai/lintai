@@ -133,6 +133,7 @@ def create_graph_payload(
     Includes all function/component nodes that call into AI components, and all AI components themselves.
     Only includes 'calls' edges where the callee is an AI component.
     Optimized for performance using flat maps.
+    Canonicalizes AI/LLM nodes so all edges point to a single node per AI/LLM component.
     """
     AI_TYPES = {
         "LLM",
@@ -156,6 +157,7 @@ def create_graph_payload(
     component_id_map = {}
     ai_component_names = set()
     all_components = {}
+    llm_canonical_id_map = {}
 
     # Build a flat map of all components for fast lookup
     for inventory in inventories:
@@ -166,15 +168,16 @@ def create_graph_payload(
             if comp.component_type in AI_TYPES:
                 ai_component_names.add(comp.name)
 
-    # Add all AI components as nodes
+    # Build canonical map for AI/LLM nodes (name+type only)
     for name in ai_component_names:
         comp = all_components[name]
-        node_id = component_id_map[name]
-        if node_id not in seen_nodes:
+        canonical_id = f"{comp.name}:{comp.component_type}"
+        llm_canonical_id_map[name] = canonical_id
+        if canonical_id not in seen_nodes:
             nodes.append(
                 {
                     "data": {
-                        "id": node_id,
+                        "id": canonical_id,
                         "label": comp.name,
                         "type": comp.component_type,
                         "file": (
@@ -185,7 +188,7 @@ def create_graph_payload(
                     }
                 }
             )
-            seen_nodes.add(node_id)
+            seen_nodes.add(canonical_id)
 
     # Add all callers of AI components as nodes
     for comp in all_components.values():
@@ -209,12 +212,12 @@ def create_graph_payload(
                     )
                     seen_nodes.add(node_id)
 
-    # Add 'calls' edges where the callee is an AI component
+    # Add 'calls' edges where the callee is an AI component, always using canonical target
     for comp in all_components.values():
         source_id = component_id_map[comp.name]
         for rel in comp.relationships:
             if rel.type == "calls" and rel.target_name in ai_component_names:
-                target_id = component_id_map.get(rel.target_name)
+                target_id = llm_canonical_id_map.get(rel.target_name)
                 if source_id and target_id:
                     edges.append(
                         {
