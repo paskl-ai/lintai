@@ -211,8 +211,10 @@ def ai_inventory_cmd(
 
     units = ctx.obj["units"]
 
-    # Run the new, unified analysis engine
-    analyzer = ProjectAnalyzer(units, call_depth=ai_call_depth).analyze()
+    # Use the already-initialized global ai_analyzer
+    from lintai.engine import ai_analyzer
+
+    analyzer = ai_analyzer
 
     # Get the results from the .inventories attribute
     inventory_list = [inv.model_dump() for inv in analyzer.inventories.values()]
