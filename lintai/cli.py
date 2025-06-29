@@ -137,7 +137,7 @@ def create_graph_payload(
 
     for inventory in inventories:
         for comp in inventory.components:
-            node_id = f"{comp.location}"  # Use location for a unique ID
+            node_id = f"{comp.name}:{comp.location}:{comp.component_type}"  # Composite key for uniqueness
             if node_id not in seen_nodes:
                 nodes.append(
                     {
