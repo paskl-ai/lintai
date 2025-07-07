@@ -52,19 +52,30 @@ const formatDate = (dateString) => {
 // TYPES
 // ------------------------------------------------------------------
 interface InventoryRecord {
-  sink: string;
-  at: string;
-  date: string;
-  elements: any;
+  file_path: string;
+  frameworks: string[];
+  components: {
+    component_type: string;
+    name: string;
+    location: string;
+    code_snippet: string;
+    call_chain: string[];
+    relationships: {
+      target_name: string;
+      type: string;
+    }[];
+  }[];
 }
+
 interface GroupedInventoryItem {
   type: 'folder' | 'file';
   name: string;
   path: string;
-  date?: string;
-  records: InventoryRecord[];
+  frameworks?: string[];
+  components?: any[];
   children?: GroupedInventoryItem[];
 }
+
 // ------------------------------------------------------------------
 // HELPER COMPONENTS
 // ------------------------------------------------------------------
@@ -179,65 +190,88 @@ const dispatch = useAppDispatch();
     queryFn: async () => (await ScanService.getLastResultsByType('inventory')),
     initialData: [],
     refetchOnWindowFocus: false,
-    enabled: !scans?.data?.records,
+    enabled: !scans?.report,
   })
   
 
  
 
   console.log(data,'data')
-  const records = data?.report?.data?.records || [];
-  const stats = data?.report?.stats || {};
+  const groupedAndFilteredData = useMemo(() => {
+    const records = data?.report?.inventory_by_file || [];
+    
+    const filtered = records.filter(rec =>
+      rec.file_path.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      rec.frameworks.join(',').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const fileMap = new Map();
+    filtered.forEach(record => {
+      const filePath = record.file_path;
+      if (!fileMap.has(filePath)) {
+        fileMap.set(filePath, { 
+          name: filePath.split('/').pop(), 
+          path: filePath, 
+          type: 'file',
+          frameworks: record.frameworks,
+          components: record.components,
+          date: new Date().toISOString() // Use current date or get from metadata if available
+        });
+      }
+    });
+
+    const root = { children: {} };
+    Array.from(fileMap.values()).forEach(file => {
+      const pathParts = file.path.split('/');
+      let currentLevel = root.children;
+      pathParts.forEach((part, index) => {
+        const isFileNode = index === pathParts.length - 1;
+        if (isFileNode) {
+          currentLevel[part] = file;
+        } else {
+          if (!currentLevel[part]) {
+            currentLevel[part] = { 
+              name: part, 
+              path: pathParts.slice(0, index + 1).join('/'), 
+              type: 'folder', 
+              children: {} 
+            };
+          }
+          currentLevel = currentLevel[part].children;
+        }
+      });
+    });
+
+    const toArray = (nodes) => Object.values(nodes).map(node => ({ 
+      ...node, 
+      children: node.children ? toArray(node.children) : undefined 
+    }));
+    
+    return toArray(root.children);
+  }, [data?.report?.inventory_by_file, searchQuery]);
+
+  const stats = useMemo(() => {
+    const inventory = data?.report?.inventory_by_file || [];
+    return {
+      totalFiles: inventory.length,
+      totalComponents: inventory.reduce((acc, file) => acc + (file.components?.length || 0), 0),
+      frameworks: new Set(inventory.flatMap(file => file.frameworks || [])).size
+    };
+  }, [data]);
 
   const handleFolderSelection = (path) => {
     startScanInventory({ path });
     setIsFileSystemModalOpen(false);
   };
   
-  const groupedAndFilteredData = useMemo(() => {
-   
-
-    const filtered = records.filter(rec =>
-      rec.at.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rec.sink.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-    const fileMap = new Map();
-    filtered.forEach(record => {
-        const filePath = record.at.split(':')[0];
-        if (!fileMap.has(filePath)) {
-            fileMap.set(filePath, { name: filePath.split('/').pop(), path: filePath, type: 'file', records: [] });
-        }
-        fileMap.get(filePath).records.push(record);
-    });
-    const root = { children: {} };
-    Array.from(fileMap.values()).forEach(file => {
-        const pathParts = file.path.split('/');
-        let currentLevel = root.children;
-        pathParts.forEach((part, index) => {
-            const isFileNode = index === pathParts.length - 1;
-            if (isFileNode) {
-                currentLevel[part] = file;
-            } else {
-                if (!currentLevel[part]) {
-                    currentLevel[part] = { name: part, path: pathParts.slice(0, index + 1).join('/'), type: 'folder', children: {} };
-                }
-                currentLevel = currentLevel[part].children;
-            }
-        });
-    });
-    const toArray = (nodes) => Object.values(nodes).map(node => ({ ...node, children: node.children ? toArray(node.children) : undefined }));
-    return toArray(root.children);
-  }, [records, searchQuery]);
-
   return (
     <div className="bg-gray-50 min-h-screen p-6 sm:ml-50" >
         <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false}/>
         <h1 className="text-3xl font-bold text-gray-800 mb-6">Inventory</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatCard label="Total Files Scanned" value={stats.totalFiles || 0} mainStyle />
-            <StatCard label="Components" value={stats.components || 0} />
-            <StatCard label="Sinks" value={stats.sinks || 0} />
-            <StatCard label="AI Calls" value={stats.aiCalls || 0} />
+            <StatCard label="Total Files Scanned" value={stats.totalFiles} mainStyle />
+            <StatCard label="Total Components" value={stats.totalComponents} />
+            <StatCard label="Frameworks Used" value={stats.frameworks} />
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">

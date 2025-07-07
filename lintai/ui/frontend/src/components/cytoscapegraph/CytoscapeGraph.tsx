@@ -41,8 +41,6 @@
      {
        selector: 'node',
        style: {
-
-
          'text-max-width': 120,
          'text-valign': 'center',
          'text-halign': 'center',
@@ -55,10 +53,10 @@
          'background-gradient-stop-positions': '0 95%',
          shape: 'round-rectangle',
          label: 'data(name)',
-         'width': 'label',     // 👈 auto-size to label
+         'width': 'label',
          'height': 'label',
          'padding': '10px',
-         'text-wrap': 'wrap',  // keep
+         'text-wrap': 'wrap',
          'shadow-blur': 10,
          'shadow-color': '#000',
          'shadow-opacity': 0.25,
@@ -67,16 +65,38 @@
          'transition-duration': '250ms',
        },
      },
-     { selector: 'node[label="file"]', style: { 'background-color': '#FFD166', 'border-color': '#D9A400' }},
-
-     /* sinks look different */
-     {
-       selector: 'node[label = "sink"]',
+     
+     /* Component type specific styling */
+     { selector: 'node[label="file"]', style: { 'background-color': '#FFD166', 'background-gradient-stop-colors': '#FFE08A #FFD166', 'border-color': '#D9A400', 'border-width': 2 }},
+     { selector: 'node[label="function"]', style: { 'background-color': '#4ECDC4', 'background-gradient-stop-colors': '#7EDDD6 #4ECDC4', shape: 'round-rectangle' }},
+     { selector: 'node[label="agent"]', style: { 'background-color': '#45B7D1', 'background-gradient-stop-colors': '#6AC5DD #45B7D1', shape: 'round-rectangle' }},
+     { selector: 'node[label="multiagent"]', style: { 'background-color': '#96CEB4', 'background-gradient-stop-colors': '#B8D8C7 #96CEB4', shape: 'round-rectangle' }},
+     { selector: 'node[label="tool"]', style: { 'background-color': '#FFEAA7', 'background-gradient-stop-colors': '#FFF2C7 #FFEAA7', shape: 'round-rectangle', color: '#2d3436' }},
+     { selector: 'node[label="ui"]', style: { 'background-color': '#FD79A8', 'background-gradient-stop-colors': '#FD9EC7 #FD79A8', shape: 'round-rectangle' }},
+     { selector: 'node[label="chain"]', style: { 'background-color': '#A29BFE', 'background-gradient-stop-colors': '#BAB5FF #A29BFE', shape: 'round-rectangle' }},
+     { selector: 'node[label="lifecycle"]', style: { 'background-color': '#6C5CE7', 'background-gradient-stop-colors': '#8B7EEA #6C5CE7', shape: 'round-rectangle' }},
+     { selector: 'node[label="sink"]', style: { 'background-color': '#FF6B6B', 'background-gradient-stop-colors': '#FF9C9C #FF6B6B', shape: 'round-rectangle' }},
+     { selector: 'node[label="external"]', style: { 'background-color': '#E17055', 'background-gradient-stop-colors': '#E88A7A #E17055', shape: 'round-rectangle' }},
+     
+     /* Compound node styling (bounding box for file) */
+     { 
+       selector: 'node:parent', 
        style: {
-         'background-color': '#FF6B6B',
-         'background-gradient-stop-colors': '#FF9C9C #FF6B6B',
-         shape: "round-rectangle"
-              },
+         'background-color': '#f8f9fa',
+         'background-opacity': 0.8,
+         'border-color': '#dee2e6',
+         'border-width': 2,
+         'border-style': 'dashed',
+         'text-valign': 'top',
+         'text-halign': 'center',
+         'font-size': 14,
+         'font-weight': 'bold',
+         'color': '#495057',
+         'padding': 20,
+         'shape': 'round-rectangle',
+         'min-width': 200,
+         'min-height': 150
+       }
      },
      /* edges */
      {
@@ -91,6 +111,18 @@
          'arrow-scale': 1.3,
          'transition-property': 'width line-color target-arrow-color opacity',
          'transition-duration': '200ms',
+         label: 'data(label)',
+         'font-size': 10,
+         'font-weight': 'normal',
+         'text-rotation': 'autorotate',
+         'text-margin-y': -10,
+         'text-background-color': '#ffffff',
+         'text-background-opacity': 0.8,
+         'text-background-padding': 2,
+         'text-border-color': '#cccccc',
+         'text-border-width': 1,
+         'text-border-opacity': 0.5,
+         color: '#333333',
        },
      },
      /* highlight class (applied on expand) */
@@ -113,15 +145,15 @@
    ];
 
    /* ----------  Default LR dagre layout  ---------- */
-   const horizontalDagre: LayoutOptions = {
+   const horizontalDagre: any = {
      name: 'dagre',
-     rankDir: 'LR', // flow Left ➜ Right
+     rankDir: 'TB', // flow Left ➜ Right
      nodeSep: 50,   // horizontal spacing
      rankSep: 90,   // vertical spacing
      edgeSep: 15,
      animate: true,
      fit: true,
-     padding: 0,
+     padding: 20,
    };
 
    /* ----------  Component  ---------- */
@@ -136,12 +168,18 @@
      useEffect(() => {
        if (!containerRef.current) return;
 
+       console.log('CytoscapeGraph nodes:', nodes);
+       console.log('CytoscapeGraph edges:', edges);
+
        const cy = cytoscape({
          container: containerRef.current,
          elements: [...nodes, ...edges],
          style: styleDefs || modernStyle,
          layout: layout || horizontalDagre,
          wheelSensitivity: 0.2,
+         userZoomingEnabled: true,
+         userPanningEnabled: true,
+         boxSelectionEnabled: false,
        });
 
        /* --- bubble-expand / collapse behaviour --- */

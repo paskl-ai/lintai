@@ -49,6 +49,7 @@
     "react-router": "^7.2.0",
     "react-toastify": "^11.0.5",
     "react-window": "^1.8.11",
+    "reactflow": "^11.11.4",
     "redux": "5.0.1",
     "redux-persist": "^6.0.0",
     "yup": "^1.6.1"
