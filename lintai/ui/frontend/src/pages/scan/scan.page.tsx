@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { FiSearch, FiFolder } from 'react-icons/fi'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router'
@@ -23,11 +23,11 @@ import Table from '../../components/table/Table'
 
 import { QueryKey } from '../../api/QueryKey'
 import {
-  resetJob,
   startJob,
 } from '../../redux/services/ServerStatus/server.status.slice'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { StatCard } from '../../components/stateCard/StateCard'
+import { useJobManager } from '../../hooks/useJobManager'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -186,53 +186,37 @@ const Scan = () => {
   const [severityFilter, setSeverityFilter] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false)
-  const { jobId: runId, isProcessing } = useAppSelector(
-    (state) => state.serverStatus,
-  )
   const configValues = useAppSelector((state) => state.config)
+
+  // Use the new job manager hook
+  const { 
+    findings, 
+    isLoading, 
+    isProcessing, 
+    error, 
+    invalidateQueries 
+  } = useJobManager({
+    jobType: 'scan',
+    onJobComplete: () => {
+      toast.success('Scan completed successfully!');
+    },
+    onJobError: (error) => {
+      toast.error(error.message || 'Failed to complete scan.');
+    }
+  });
 
   const { mutate: startScanMutation, isPending: isStartingScan } = useMutation({
     mutationFn: (body) => ScanService.startScan(body),
     onSuccess: (res) => {
       toast.loading(`Scanning...`)
       if (res?.run_id) {
-        dispatch(startJob({ jobId: res.run_id, jobStatus: 'Starting' }))
-      } else {
-        dispatch(resetJob())
+        dispatch(startJob({ jobId: res.run_id, jobStatus: 'starting', jobType: 'scan' }))
       }
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to start scan.')
-      dispatch(resetJob());
     },
   })
-
-  const { data: scanResult, isFetching: isFetchingScan } = useQuery({
-    queryKey: [QueryKey.JOB, runId],
-    queryFn: async() => {
-      if (!runId) return null;
-      const res=await ScanService.getResults(runId);
-      if (res?.report||res?.findings) {
-        toast.dismiss();
-        toast.success("Scan complete!");
-        dispatch(resetJob());
-    }
-      return res?.report||res?.findings
-    },
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3000 : false,
-    enabled: !!runId && isProcessing,
-
-  })
-
-  const { data: lastScanResult, isLoading: isLoadingLastScan } = useQuery({
-    queryKey: [QueryKey.JOB + 'last-scan'],
-    queryFn: () => ScanService.getLastResultsByType('scan'),
-    enabled: !isProcessing,
-  })
-
-  const report = isProcessing ? scanResult?.report : lastScanResult?.report
-  const findings: Finding[] = report?.findings || []
 
   const handleFolderSelection = (path: string) => {
     startScanMutation({ path })
@@ -302,7 +286,7 @@ const Scan = () => {
     }, {} as Record<string, number>)
   }, [findings])
 
-  const isLoading = isStartingScan || isProcessing || (isLoadingLastScan && !runId);
+  const isLoadingData = isStartingScan || isLoading;
 
   return (
     <div className="flex sm:ml-50 bg-gray-50 min-h-screen">
@@ -391,7 +375,7 @@ const Scan = () => {
                 </div>
              </div>
         
-            {isLoading ? (
+            {isLoadingData ? (
                 <FindingsSkeleton />
             ) : groupedAndFilteredData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center text-gray-500">

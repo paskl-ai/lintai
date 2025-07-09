@@ -23,6 +23,8 @@ const PublicRouter = () => {
 
         <Route path="/inventory" element={<Inventory />} >
         </Route>
+        <Route path="/inventory/:id" element={<Inventory />} />
+
         <Route path="/inventory/details/:pagelocation" element={<InventoryDetailsPage />} />
 
 

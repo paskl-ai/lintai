@@ -35,6 +35,7 @@ import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { toast } from 'react-toastify'
 import { resetJob } from '../../redux/services/ServerStatus/server.status.slice'
 import { StatCard } from '../../components/stateCard/StateCard'
+import { useNavigate } from 'react-router'
 
 const CustomGraph = lazy(
   async () => import('../../components/graph/CustomGraph'),
@@ -86,8 +87,18 @@ export const options = {
 
 const HistoryItem = ({ item, index }: { item: any; index: number }) => {
   const [isExpanded, setIsExpanded] = useState(false)
+const navigate=useNavigate()
+  const toggleExpand = () =>{
 
-  const toggleExpand = () => setIsExpanded(!isExpanded)
+    if(item.type == 'scan') {
+      setIsExpanded(!isExpanded)
+    }
+    else{
+      navigate(`/inventory/${encodeURIComponent(item?.run?.run_id)}`, { state: item });
+
+    }
+    
+    }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -117,7 +128,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
     }
   }
 
-  const findingsCount = item?.report?.findings?.length || 0
+  const findingsCount = item?.report?.findings?.length || item?.report?.inventory_by_file?.length || 0
 
   return (
     <div className="border rounded-lg shadow-md bg-white mb-4 overflow-hidden">
@@ -153,7 +164,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
         </div>
       </div>
 
-      {isExpanded && (
+      {isExpanded&&item?.type=='scan' && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
@@ -192,7 +203,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
             <h4 className="font-semibold text-gray-700 mb-2">Findings</h4>
             {findingsCount > 0 ? (
               <div className="space-y-3">
-                {item?.report?.findings.map(
+                {item?.report?.findings?.map(
                   (finding: any, findIndex: number) => (
                     <div
                       key={findIndex}

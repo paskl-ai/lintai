@@ -1,4 +1,13 @@
 import api from "../../Api"
+import { 
+  ScanJobResult, 
+  InventoryJobResult, 
+  LastScanResult, 
+  ScanType, 
+  JobResult,
+  ScanReport,
+  InventoryReport
+} from "../types"
 
 export interface scanInventoryDTO {path: string, depth?: number, logLevel?: string}
 export interface startScanDTO {path: string, depth?: number, logLevel?: string}
@@ -8,7 +17,7 @@ class Scan {
         return response.data
     }
 
-    async startScan(body: startScanDTO, files?: File[]) {
+    async startScan(body: startScanDTO, files?: File[]): Promise<JobResult> {
         const formData = new FormData();
 
         if (files && files.length > 0) {
@@ -34,7 +43,7 @@ class Scan {
     }
 
 
-    async scanInventory(body:scanInventoryDTO) {
+    async scanInventory(body:scanInventoryDTO): Promise<JobResult> {
         const params = {
             path:body.path,
             depth:body.depth,
@@ -50,22 +59,22 @@ class Scan {
         return response.data
     }
 
-    async getResults(runId: string) {
+    async getResults(runId: string): Promise<ScanJobResult | InventoryJobResult> {
         const response = await api.get(`/api/results/${runId}`) // Updated endpoint
         return response.data
     }
 
-    async getLastResults() {
+    async getLastResults(): Promise<LastScanResult> {
         const response = await api.get(`/api/last-result`) // Updated endpoint
         return response.data
     }
 
-    async getLastResultsByType(type: string) {
+    async getLastResultsByType(type: ScanType): Promise<LastScanResult> {
         const response = await api.get(`/api/last-result/${type}`) // Get last result by type
         return response.data
     }
 
-    async getHistory() {
+    async getHistory(): Promise<LastScanResult[]> {
         const response = await api.get('/api/history'); // Updated endpoint for history
         return response.data.map((item: any) => ({
             type: item.type,
@@ -73,6 +82,7 @@ class Scan {
             scanned_path: item.scanned_path,
             errors: item.errors,
             report: item.report,
+            run:item.run
         }));
     }
 

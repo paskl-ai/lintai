@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ToastContainer, toast } from 'react-toastify'
 import { scanInventoryDTO, ScanService } from '../../api/services/Scan/scan.api';
 import FileSystemPage from '../filesystem/filesystem.page';
 import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo';
-import { resetJob, startJob } from '../../redux/services/ServerStatus/server.status.slice';
-import { useAppSelector } from '../../redux/services/store';
-import { useNavigate } from 'react-router';
+import { startJob } from '../../redux/services/ServerStatus/server.status.slice';
+import { useAppSelector, useAppDispatch } from '../../redux/services/store';
+import { useLocation, useNavigate } from 'react-router';
 import { StatCard } from '../../components/stateCard/StateCard';
+import { useJobManager } from '../../hooks/useJobManager';
 
 // ------------------------------------------------------------------
 // MOCK DATA & SERVICES (to make the component self-contained)
@@ -16,7 +17,6 @@ import { StatCard } from '../../components/stateCard/StateCard';
 
 
 const QueryKey = { JOB: 'JOB' };
-const useAppDispatch = () => (action) => console.log("Dispatching:", action);
 
 // Mocking local components
 const CommonButton = ({ children, ...props }) => <button {...props}>{children}</button>;
@@ -84,8 +84,8 @@ interface GroupedInventoryItem {
 const InventoryRow = ({ item, level = 0 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const navigate = useNavigate();
+
     const isFolder = item.type === 'folder';
-console.log(item,'inventory items in rows')
     const handleViewScan = (e) => {
         // e.stopPropagation();
         // toast.info(`Navigating to inventory details for ${item.name}`);
@@ -125,13 +125,31 @@ const Inventory = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false);
   const configValues = useAppSelector((state) => state.config);
+  const dispatch = useAppDispatch();
+  const { state } = useLocation();
 
-    const { jobId: runId, isProcessing } = useAppSelector(state => state.serverStatus)
-const queryClient = useQueryClient();
-const dispatch = useAppDispatch();
+  
+  // Use the new job manager hook
+  const { 
+    report, 
+    inventory, 
+    isLoading, 
+    isProcessing, 
+    error, 
+    invalidateQueries 
+  } = useJobManager({
+    jobType: 'inventory',
+    onJobComplete: () => {
+      // Additional actions when job completes
+      toast.success('Inventory scan completed successfully!');
+    },
+    onJobError: (error) => {
+      toast.error(error.message || 'Failed to complete inventory scan.');
+    }
+  });
 
   /* ------------------------------ Mutation ----------------------- */
-  const { mutate: startScanInventory } = useMutation({
+  const { mutate: startScanInventory, isPending: isStartingScan } = useMutation({
     mutationFn: async (body: scanInventoryDTO) =>
       await ScanService.scanInventory(body),
     onSuccess: (res, data) => {
@@ -141,66 +159,27 @@ const dispatch = useAppDispatch();
         }`,
       )
 
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: [QueryKey.JOB + 'inventory'] })
-      }, 2_000)
-
       if (res?.run_id) {
         dispatch(
           startJob({
             jobId: res.run_id as any,
-            jobStatus: 'Starting',
+            jobStatus: 'starting',
+            jobType: 'inventory',
           }),
         )
-      } else {
-        dispatch(resetJob())
       }
     },
     onError: (err: any) =>
       toast.error(err.message || 'Failed to start inventory scan.'),
   })
-
-  /* ------------------------------ Queries ------------------------ */
-  const {
-    data: scans,
-    isFetching: isFetchingScan,
-    error: scanError,
-  } = useQuery({
-    queryKey: [QueryKey.JOB + 'inventory'],
-    queryFn: async () => {
-      const res = await ScanService.getResults(runId!)
-      if (res?.data) {
-        dispatch(resetJob())
-        toast.dismiss()
-      }
-      return res
-    },
-    initialData: [],
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3_000 : false,
-    enabled: !!runId,
-  })
-
-  const {
-    data,
-    isFetching: isLoading,
-    error: lastScanError,
-  } = useQuery({
-    queryKey: [QueryKey.JOB + 'last-inventory'],
-    queryFn: async () => (await ScanService.getLastResultsByType('inventory')),
-    initialData: [],
-    refetchOnWindowFocus: false,
-    enabled: !scans?.report,
-  })
   
 
- 
+ console.log(state,'state passed, and inventory=>', inventory);
 
-  console.log(data,'data')
   const groupedAndFilteredData = useMemo(() => {
-    const records = data?.report?.inventory_by_file || [];
+    const records =state?.report?.inventory_by_file|| inventory || [];
     
-    const filtered = records.filter(rec =>
+    const filtered = records?.filter(rec =>
       rec.file_path.toLowerCase().includes(searchQuery.toLowerCase()) ||
       rec.frameworks.join(',').toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -248,16 +227,16 @@ const dispatch = useAppDispatch();
     }));
     
     return toArray(root.children);
-  }, [data?.report?.inventory_by_file, searchQuery]);
+  }, [inventory,state?.report?.inventory_by_file, searchQuery]);
 
   const stats = useMemo(() => {
-    const inventory = data?.report?.inventory_by_file || [];
+    const records = state?.report?.inventory_by_file||inventory || [];
     return {
-      totalFiles: inventory.length,
-      totalComponents: inventory.reduce((acc, file) => acc + (file.components?.length || 0), 0),
-      frameworks: new Set(inventory.flatMap(file => file.frameworks || [])).size
+      totalFiles: records.length,
+      totalComponents: records.reduce((acc, file) => acc + (file.components?.length || 0), 0),
+      frameworks: new Set(records.flatMap(file => file.frameworks || [])).size
     };
-  }, [data]);
+  }, [inventory,state?.report?.inventory_by_file]);
 
   const handleFolderSelection = (path) => {
     startScanInventory({ path });
@@ -284,7 +263,7 @@ const dispatch = useAppDispatch();
                 </div>
                 <div className="flex items-center gap-2">
                     <CommonButton onClick={() => setIsFileSystemModalOpen(true)}
-                                  loading={isProcessing} disabled={isProcessing}
+                                  loading={isProcessing || isStartingScan} disabled={isProcessing || isStartingScan}
                                   className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center shadow-sm hover:bg-blue-700 transition-colors disabled:bg-blue-300">
                         Scan for Inventory
                     </CommonButton>
