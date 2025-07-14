@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ToastContainer, toast } from 'react-toastify'
 import { scanInventoryDTO, ScanService } from '../../api/services/Scan/scan.api';
 import FileSystemPage from '../filesystem/filesystem.page';
@@ -129,19 +129,13 @@ const Inventory = () => {
   const { state } = useLocation();
 
   
-  // Use the new job manager hook
-  const { 
-    report, 
-    inventory, 
-    isLoading, 
-    isProcessing, 
-    error, 
-    invalidateQueries 
-  } = useJobManager({
+  // Use job manager for consistent job tracking (but don't fetch last results)
+  const { isProcessing } = useJobManager({
     jobType: 'inventory',
-    onJobComplete: () => {
+    enableLastResultFetch: false,
+    onJobComplete: (result, resultPath) => {
       // Additional actions when job completes
-      toast.success('Inventory scan completed successfully!');
+      console.log('Inventory scan completed, result path:', resultPath);
     },
     onJobError: (error) => {
       toast.error(error.message || 'Failed to complete inventory scan.');
@@ -174,33 +168,52 @@ const Inventory = () => {
   })
   
 
- console.log(state,'state passed, and inventory=>', inventory);
+
+  // Fetch inventory history
+  const { data: inventoryHistory, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['inventory-history'],
+    queryFn: ScanService.getInventoryHistory,
+    initialData: [],
+  });
 
   const groupedAndFilteredData = useMemo(() => {
-    const records =state?.report?.inventory_by_file|| inventory || [];
+    // Use inventory history instead of current state
+    const historyData = inventoryHistory || [];
+    const allFiles = new Map();
     
-    const filtered = records?.filter(rec =>
-      rec.file_path.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rec.frameworks.join(',').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const fileMap = new Map();
-    filtered.forEach(record => {
-      const filePath = record.file_path;
-      if (!fileMap.has(filePath)) {
-        fileMap.set(filePath, { 
-          name: filePath.split('/').pop(), 
-          path: filePath, 
-          type: 'file',
-          frameworks: record.frameworks,
-          components: record.components,
-          date: new Date().toISOString() // Use current date or get from metadata if available
+    // Collect all files from all inventory runs
+    historyData.forEach(historyEntry => {
+      if (historyEntry.inventory_by_file) {
+        historyEntry.inventory_by_file.forEach(record => {
+          const filePath = record.file_path;
+          const existingFile = allFiles.get(filePath);
+          
+          // Keep the most recent scan for each file
+          if (!existingFile || new Date(historyEntry.timestamp) > new Date(existingFile.date)) {
+            allFiles.set(filePath, {
+              name: filePath.split('/').pop(),
+              path: filePath,
+              type: 'file',
+              frameworks: record.frameworks,
+              components: record.components,
+              date: historyEntry.timestamp,
+              run_id: historyEntry.run_id,
+              status: historyEntry.status
+            });
+          }
         });
       }
     });
 
+    // Filter based on search query
+    const filtered = Array.from(allFiles.values()).filter(file =>
+      file.path.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      file.frameworks?.join(',').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Group files into folder structure
     const root = { children: {} };
-    Array.from(fileMap.values()).forEach(file => {
+    filtered.forEach(file => {
       const pathParts = file.path.split('/');
       let currentLevel = root.children;
       pathParts.forEach((part, index) => {
@@ -227,16 +240,36 @@ const Inventory = () => {
     }));
     
     return toArray(root.children);
-  }, [inventory,state?.report?.inventory_by_file, searchQuery]);
+  }, [inventoryHistory, searchQuery]);
 
   const stats = useMemo(() => {
-    const records = state?.report?.inventory_by_file||inventory || [];
+    const historyData = inventoryHistory || [];
+    const allFiles = new Map();
+    
+    // Get the latest scan for each file from history
+    historyData.forEach(historyEntry => {
+      if (historyEntry.inventory_by_file) {
+        historyEntry.inventory_by_file.forEach(record => {
+          const filePath = record.file_path;
+          const existingFile = allFiles.get(filePath);
+          
+          if (!existingFile || new Date(historyEntry.timestamp) > new Date(existingFile.date)) {
+            allFiles.set(filePath, {
+              ...record,
+              date: historyEntry.timestamp
+            });
+          }
+        });
+      }
+    });
+    
+    const records = Array.from(allFiles.values());
     return {
       totalFiles: records.length,
       totalComponents: records.reduce((acc, file) => acc + (file.components?.length || 0), 0),
       frameworks: new Set(records.flatMap(file => file.frameworks || [])).size
     };
-  }, [inventory,state?.report?.inventory_by_file]);
+  }, [inventoryHistory]);
 
   const handleFolderSelection = (path) => {
     startScanInventory({ path });
@@ -288,7 +321,7 @@ const Inventory = () => {
                 <div className="w-1/6 p-2.5 text-right pr-4">Action</div>
             </div>
 
-            {isLoading ? <p className="p-4 text-center text-gray-500">Loading inventory...</p> : (
+            {isLoadingHistory ? <p className="p-4 text-center text-gray-500">Loading inventory...</p> : (
                 groupedAndFilteredData.length > 0 ? (
                      groupedAndFilteredData.map((item) => <InventoryRow key={item.path} item={item} />)
                 ) : (

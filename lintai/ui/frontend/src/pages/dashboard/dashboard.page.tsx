@@ -291,7 +291,8 @@ const Dashboard = () => {
     queryKey: [QueryKey.JOB + 'history'],
     queryFn: async () => {
       const res = await ScanService.getHistory()
-      return res
+      // Sort by date with latest entries at top
+      return res.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
     },
     initialData: [],
     refetchOnMount: true,

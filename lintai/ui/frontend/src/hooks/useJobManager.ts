@@ -30,21 +30,43 @@ export const useJobManager = (options: UseJobOptions) => {
       
       const result = await ScanService.getResults(runId);
       
-      // Check if job is complete
-      if (result?.data || result?.report || (result as any)?.findings||result?.inventory_by_file) {
+      // Check if job is complete - both scan and inventory have data when complete
+      const hasData = result?.data || result?.report || 
+                     (result as any)?.findings || 
+                     (result as any)?.inventory_by_file ||
+                     (result as any)?.findings_by_file;
+      
+      if (hasData) {
         toast.dismiss();
-        toast.success(`${jobType === 'scan' ? 'Scan' : 'Inventory scan'} completed successfully!`);
+        
+        const jobRunId = result?.run_id || runId;
+        const resultPath = jobType === 'scan' ? `/findings/${jobRunId}` : `/inventory/${jobRunId}`;
+        
+        // Show completion toast with option to view results
+        toast.success(
+          `${jobType === 'scan' ? 'Scan' : 'Inventory scan'} completed successfully! Click to view results.`,
+          {
+            autoClose: 8000,
+            onClick: () => {
+              window.location.href = resultPath;
+            }
+          }
+        );
         
         // Reset job state
         dispatch(resetJob());
         
-        // Trigger completion callback
+        // Trigger completion callback with result path for additional navigation
         if (onJobComplete) {
-          onJobComplete(result);
+          onJobComplete(result, resultPath);
         }
         
         // Invalidate last result query to refetch
         queryClient.invalidateQueries({ queryKey: ['last-result', jobType] });
+        
+        // Also invalidate history queries to update the lists
+        queryClient.invalidateQueries({ queryKey: ['scan-history'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory-history'] });
       }
       
       return result;
@@ -55,11 +77,17 @@ export const useJobManager = (options: UseJobOptions) => {
     retry: (failureCount, error) => {
       // Only retry network errors, not application errors
       if (failureCount < 3 && error?.message?.includes('Network Error')) {
+ 
+          dispatch(resetJob());
+          toast.error(`Error fetching ${jobType} results: ${currentResultError?.detail}`)
+   
+
         return true;
       }
       return false;
     }
   });
+
 
   // Query for fetching last scan results (shown when no active job)
   const { 

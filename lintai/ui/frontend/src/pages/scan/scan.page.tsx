@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { FiSearch, FiFolder } from 'react-icons/fi'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router'
@@ -37,7 +37,6 @@ const FiFolder = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" w
 const FiFileText = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
 const FiChevronDown = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const FiChevronRight = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
-const FiAlertTriangle = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
 const FiShield = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>;
 const FiSearch = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const FiEye = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
@@ -188,22 +187,27 @@ const Scan = () => {
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false)
   const configValues = useAppSelector((state) => state.config)
 
-  // Use the new job manager hook
-  const { 
-    findings, 
-    isLoading, 
-    isProcessing, 
-    error, 
-    invalidateQueries 
-  } = useJobManager({
+  // Use job manager for consistent job tracking (but don't fetch last results)
+  const { isProcessing } = useJobManager({
     jobType: 'scan',
-    onJobComplete: () => {
-      toast.success('Scan completed successfully!');
+    enableLastResultFetch: false,
+    onJobComplete: (result, resultPath) => {
+      // Additional actions when job completes
+      console.log('Scan completed, result path:', resultPath);
     },
     onJobError: (error) => {
       toast.error(error.message || 'Failed to complete scan.');
     }
   });
+
+  // Fetch scan history
+  const { data: scanHistory, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['scan-history'],
+    queryFn: ScanService.getScanHistory,
+    initialData: [],
+  });
+
+  
 
   const { mutate: startScanMutation, isPending: isStartingScan } = useMutation({
     mutationFn: (body) => ScanService.startScan(body),
@@ -224,7 +228,30 @@ const Scan = () => {
   }
 
   const groupedAndFilteredData = useMemo(() => {
-    const filteredFindings = findings.filter((f) => {
+    // Use scan history instead of current state
+    const historyData = scanHistory || [];
+    const allFindings = [];
+    
+    // Collect all findings from all scan runs
+    historyData.forEach(historyEntry => {
+      if (historyEntry?.findings_by_file) {
+        Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
+          if (findings && Array.isArray(findings)) {
+            findings.forEach(finding => {
+              allFindings.push({
+                ...finding,
+                location: filePath,
+                date: historyEntry.timestamp,
+                run_id: historyEntry.run_id,
+                status: historyEntry.status
+              });
+            });
+          }
+        });
+      }
+    });
+
+    const filteredFindings = allFindings.filter((f) => {
       const sevMatch = severityFilter.length === 0 || severityFilter.includes(f.severity)
       const searchMatch =
         searchQuery === '' ||
@@ -276,17 +303,51 @@ const Scan = () => {
     });
 
     return root.children || [];
-  }, [findings, severityFilter, searchQuery]);
+  }, [scanHistory, severityFilter, searchQuery]);
 
 
   const severityCounts = useMemo(() => {
-    return findings.reduce((acc, f) => {
+    const historyData = scanHistory || [];
+    const allFindings = [];
+    
+    // Get all findings from scan history
+    historyData.forEach(historyEntry => {
+      if (historyEntry?.findings_by_file) {
+        Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
+          if (findings && Array.isArray(findings)) {
+            findings.forEach(finding => {
+              allFindings.push(finding);
+            });
+          }
+        });
+      }
+    });
+
+    return allFindings.reduce((acc, f) => {
       acc[f.severity] = (acc[f.severity] || 0) + 1
       return acc
     }, {} as Record<string, number>)
-  }, [findings])
+  }, [scanHistory])
 
-  const isLoadingData = isStartingScan || isLoading;
+  const totalFindings = useMemo(() => {
+    const historyData = scanHistory || [];
+    let count = 0;
+    
+    historyData.forEach(historyEntry => {
+      if (historyEntry?.findings_by_file) {
+        Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
+          if (findings && Array.isArray(findings)) {
+            count += findings.length;
+          }
+        });
+      }
+    });
+
+    return count;
+  }, [scanHistory]);
+  console.log('Scan history:', scanHistory,groupedAndFilteredData)
+
+  const isLoadingData = isStartingScan || isLoadingHistory;
 
   return (
     <div className="flex sm:ml-50 bg-gray-50 min-h-screen">
@@ -325,17 +386,14 @@ const Scan = () => {
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
             label="Total Findings"
-            value={findings.length}
-            icon={<FiAlertTriangle size={24} />}
-            color="text-red-500"
+            value={totalFindings}
+            mainStyle
           />
           {['critical', 'blocker', 'high', 'medium', 'low'].filter(sev => severityCounts[sev] > 0).map((sev) => (
              <StatCard
                 key={sev}
                 label={sev}
                 value={severityCounts[sev] || 0}
-                icon={<FiShield size={24} />}
-                color="text-gray-500"
             />
           ))}
         </div>
@@ -382,7 +440,7 @@ const Scan = () => {
                     <FiShield size={48} className="mb-4 text-gray-400" />
                     <p className="text-lg font-semibold">No Findings Here</p>
                     <p className="mt-1 text-sm">
-                    {findings.length > 0 ? "No results match your current filters." : "Run a new scan to find vulnerabilities."}
+                    {totalFindings > 0 ? "No results match your current filters." : "Run a new scan to find vulnerabilities."}
                     </p>
                 </div>
             ) : (

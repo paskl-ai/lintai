@@ -86,6 +86,16 @@ class Scan {
         }));
     }
 
+    async getScanHistory(): Promise<any[]> {
+        const response = await api.get('/api/history/scans');
+        return response.data;
+    }
+
+    async getInventoryHistory(): Promise<any[]> {
+        const response = await api.get('/api/history/inventory');
+        return response.data;
+    }
+
     async stopScan(runId: string) {
         // No equivalent endpoint provided for stopping a scan
         throw new Error('stopScan endpoint is not defined in the provided API list.')

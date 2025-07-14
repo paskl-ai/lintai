@@ -96,7 +96,7 @@ export interface UseJobOptions {
   jobType: ScanType;
   enableLastResultFetch?: boolean;
   refetchInterval?: number;
-  onJobComplete?: (result: any) => void;
+  onJobComplete?: (result: any, resultPath?: string) => void;
   onJobError?: (error: any) => void;
 }
 

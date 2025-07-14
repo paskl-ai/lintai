@@ -17,7 +17,9 @@ const DataFlowVisualise = ({ elements }) => {
   const entityTypes = useMemo(() => {
     if (!allNodes) return [];
     const types = Array.from(new Set(allNodes.map(n => n.data.label || n.data.type).filter(Boolean)));
-    return types.map(type => ({ label: type.charAt(0).toUpperCase() + type.slice(1), value: type }));
+    // Filter out 'file' type from the filter options
+    const filteredTypes = types.filter(type => type !== 'file');
+    return filteredTypes.map(type => ({ label: type.charAt(0).toUpperCase() + type.slice(1), value: type }));
   }, [allNodes]);
 
   const [entityFilter, setEntityFilter] = useState<string[]>([]);
