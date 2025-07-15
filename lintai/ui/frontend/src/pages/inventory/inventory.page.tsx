@@ -179,8 +179,10 @@ const Inventory = () => {
   const groupedAndFilteredData = useMemo(() => {
     // Use inventory history instead of current state
     console.log(state,inventoryHistory,'state data')
-    const historyData = [{...state,...state?.report,...state?.run}]||inventoryHistory || [];
-    const allFiles = new Map();
+    const historyData = state 
+    ? [{ ...state, ...state.report, ...state.run }] 
+    : inventoryHistory || [];   
+     const allFiles = new Map();
     
     // Collect all files from all inventory runs
     historyData.forEach(historyEntry => {
