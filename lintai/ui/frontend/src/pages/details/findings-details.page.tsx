@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 
 
@@ -38,6 +38,7 @@ const FiSearch = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" w
 const FindingsDetailsPage = () => {
     // In a real app, you'd get the file path from the URL params
     const filePath = "examples/pii_leak.py"; 
+    const navigate = useNavigate();
 
     const {state} = useLocation();
 const findings = state || []; // Assuming findings are passed via state
@@ -82,14 +83,16 @@ console.log('Findings:', state);
     <div className=" sm:ml-50 bg-gray-50 min-h-screen">
             {/* Header */}
             <div className="mb-6">
-                <a href="#" className="flex items-center text-sm text-primary hover:underline mb-4">
-                    <FiChevronLeft />
-                    Back to Findings
-                </a>
-                <h1 className="text-3xl font-bold text-gray-800">
+            <div className="flex items-center gap-2">
+
+            <span className="cursor-pointer" onClick={() => navigate(-1)}>
+            <FiChevronLeft />
+            </span>
+            <h1 className="text-3xl font-bold text-gray-800">
                     <span className="font-normal text-gray-500">Findings / </span> 
                     {filePath}
                 </h1>
+                </div>
             </div>
 
             {/* Stat Cards */}

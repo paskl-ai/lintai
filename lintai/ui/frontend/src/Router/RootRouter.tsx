@@ -8,7 +8,7 @@ const RootRouter = () => {
   console.log(!!user, 'user info')
   return (
     <>
-      {user?.email ? <PrivateRouter /> : <PubliceRouter />}
+    <PubliceRouter />
       {/* <Route path="/*" element={<NotFound />} /> */}
     </>
   )

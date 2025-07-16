@@ -15,6 +15,8 @@ const PublicRouter = () => {
   return (
     <Routes>
       <Route path="" element={<DefaultLayout />}>
+      <Route index element={<Dashboard />} />
+
         <Route path="/home" element={<Dashboard />} />
 
         <Route path="/findings" element={<Scan />} >
@@ -29,7 +31,7 @@ const PublicRouter = () => {
 
 
         <Route path="/settings" element={<ConfigurationPage />} />
-        <Route path="/data-flow" element={<DataFlowVisualise />} />
+        {/* <Route path="/data-flow" element={<DataFlowVisualise />} /> */}
       </Route>
       <Route path="/*" element={<NotFound />} />
     </Routes>
