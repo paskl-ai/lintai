@@ -86,13 +86,33 @@ class Scan {
         }));
     }
 
-    async getScanHistory(): Promise<any[]> {
-        const response = await api.get('/api/history/scans');
+    async getScanHistory(params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    }): Promise<{
+        items: any[];
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+    }> {
+        const response = await api.get('/api/history/scans', { params });
         return response.data;
     }
 
-    async getInventoryHistory(): Promise<any[]> {
-        const response = await api.get('/api/history/inventory');
+    async getInventoryHistory(params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    }): Promise<{
+        items: any[];
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+    }> {
+        const response = await api.get('/api/history/inventory', { params });
         return response.data;
     }
 

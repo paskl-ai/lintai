@@ -442,13 +442,17 @@ def history():
 
 # ─────────── /history/scans ──────────
 @app.get("/api/history/scans")
-def scan_history():
+def scan_history(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search query for filtering")
+):
     """
     Fetch the history of all scan runs as a list of items (similar to /api/history but scan-only).
     """
     runs = _runs()
     if not runs:
-        return []
+        return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 0}
 
     scan_history = []
     for run in runs:
@@ -475,6 +479,10 @@ def scan_history():
                         findings_by_file[file_path] = []
                     findings_by_file[file_path].append(finding)
         
+        # Only include scans that have actual findings
+        if not findings_by_file:
+            continue
+        
         # Get error message for failed scans
         error_message = None
         if run.status == "error" and report:
@@ -496,16 +504,88 @@ def scan_history():
     
     # Sort by timestamp, most recent first
     scan_history.sort(key=lambda x: x["timestamp"], reverse=True)
-    return scan_history
+    
+    # Apply search filter if provided
+    if search:
+        search_lower = search.lower()
+        scan_history = [
+            entry for entry in scan_history
+            if (search_lower in entry["scanned_path"].lower() or
+                search_lower in entry["run_id"].lower() or
+                any(search_lower in file_path.lower() for file_path in entry["findings_by_file"].keys()))
+        ]
+    
+    total = len(scan_history)
+    pages = (total + limit - 1) // limit
+    
+    # Apply pagination
+    start = (page - 1) * limit
+    end = start + limit
+    items = scan_history[start:end]
+    
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
 
 
 # ─────────── /history/inventory ──────────
 @app.get("/api/history/inventory")
-def inventory_history():
+def inventory_history(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search query for filtering")
+):
     """
     Fetch the history of all inventory runs with file-level breakdown.
     """
-    return _load_inventory_history()
+    history = _load_inventory_history()
+    
+    if not history:
+        return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 0}
+    
+    # Apply search filter if provided
+    if search:
+        search_lower = search.lower()
+        filtered_history = []
+        for entry in history:
+            # Check if search matches any field in the entry
+            matches = (
+                search_lower in entry.get("scanned_path", "").lower() or
+                search_lower in entry.get("run_id", "").lower()
+            )
+            
+            # Also check inventory_by_file for matches
+            if not matches and "inventory_by_file" in entry:
+                for file_record in entry["inventory_by_file"]:
+                    if (search_lower in file_record.get("file_path", "").lower() or
+                        any(search_lower in framework.lower() for framework in file_record.get("frameworks", []))):
+                        matches = True
+                        break
+            
+            if matches:
+                filtered_history.append(entry)
+        
+        history = filtered_history
+    
+    total = len(history)
+    pages = (total + limit - 1) // limit
+    
+    # Apply pagination
+    start = (page - 1) * limit
+    end = start + limit
+    items = history[start:end]
+    
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
 
 
 # ─────────── /scan ─────────────

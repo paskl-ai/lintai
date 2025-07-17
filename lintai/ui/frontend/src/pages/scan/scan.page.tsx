@@ -20,6 +20,7 @@ import CommonButton from '../../components/buttons/CommonButton'
 import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
 import FileSystemPage from '../filesystem/filesystem.page'
 import Table from '../../components/table/Table'
+import Pagination from '../../components/pagination/Pagination'
 
 import { QueryKey } from '../../api/QueryKey'
 import {
@@ -185,6 +186,8 @@ const Scan = () => {
   const [severityFilter, setSeverityFilter] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
   const configValues = useAppSelector((state) => state.config)
 
   // Use job manager for consistent job tracking (but don't fetch last results)
@@ -200,12 +203,18 @@ const Scan = () => {
     }
   });
 
-  // Fetch scan history
-  const { data: scanHistory, isLoading: isLoadingHistory } = useQuery({
-    queryKey: ['scan-history'],
-    queryFn: ScanService.getScanHistory,
-    initialData: [],
+  // Fetch scan history with pagination
+  const { data: scanHistoryResponse, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['scan-history', currentPage, itemsPerPage, searchQuery],
+    queryFn: () => ScanService.getScanHistory({
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchQuery || undefined
+    }),
+    initialData: { items: [], total: 0, page: 1, limit: itemsPerPage, pages: 0 },
   });
+
+  const scanHistory = scanHistoryResponse?.items || [];
 
   
 
@@ -451,6 +460,17 @@ const Scan = () => {
                 </div>
             )}
         </div>
+        
+        {scanHistoryResponse && scanHistoryResponse.pages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={scanHistoryResponse.pages}
+            onPageChange={setCurrentPage}
+            totalItems={scanHistoryResponse.total}
+            itemsPerPage={itemsPerPage}
+            className="mt-4"
+          />
+        )}
       </main>
     </div>
   )

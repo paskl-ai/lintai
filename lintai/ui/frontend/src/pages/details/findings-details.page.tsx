@@ -117,7 +117,7 @@ console.log('Findings:', state);
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Actions</button>
+                        {/* <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Actions</button> */}
                         <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Configuration</button>
                     </div>
                 </div>

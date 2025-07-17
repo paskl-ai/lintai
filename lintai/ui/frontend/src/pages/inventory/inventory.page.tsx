@@ -9,6 +9,7 @@ import { useAppSelector, useAppDispatch } from '../../redux/services/store';
 import { useLocation, useNavigate } from 'react-router';
 import { StatCard } from '../../components/stateCard/StateCard';
 import { useJobManager } from '../../hooks/useJobManager';
+import Pagination from '../../components/pagination/Pagination';
 
 // ------------------------------------------------------------------
 // MOCK DATA & SERVICES (to make the component self-contained)
@@ -124,6 +125,8 @@ const InventoryRow = ({ item, level = 0 }) => {
 const Inventory = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const configValues = useAppSelector((state) => state.config);
   const dispatch = useAppDispatch();
   const { state } = useLocation();
@@ -169,12 +172,18 @@ const Inventory = () => {
   
 
 
-  // Fetch inventory history
-  const { data: inventoryHistory, isLoading: isLoadingHistory } = useQuery({
-    queryKey: ['inventory-history'],
-    queryFn: ScanService.getInventoryHistory,
-    initialData: [],
+  // Fetch inventory history with pagination
+  const { data: inventoryHistoryResponse, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['inventory-history', currentPage, itemsPerPage, searchQuery],
+    queryFn: () => ScanService.getInventoryHistory({
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchQuery || undefined
+    }),
+    initialData: { items: [], total: 0, page: 1, limit: itemsPerPage, pages: 0 },
   });
+
+  const inventoryHistory = inventoryHistoryResponse?.items || [];
 
   const groupedAndFilteredData = useMemo(() => {
     // Use inventory history instead of current state
@@ -303,7 +312,7 @@ const Inventory = () => {
                                   className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center shadow-sm hover:bg-blue-700 transition-colors disabled:bg-blue-300">
                         Scan for Inventory
                     </CommonButton>
-                    <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Actions</button>
+                    {/* <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Actions</button> */}
                     <ConfigurationInfo />
                 </div>
             </div>
@@ -335,6 +344,17 @@ const Inventory = () => {
                 )
             )}
         </div>
+        
+        {inventoryHistoryResponse && inventoryHistoryResponse.pages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={inventoryHistoryResponse.pages}
+            onPageChange={setCurrentPage}
+            totalItems={inventoryHistoryResponse.total}
+            itemsPerPage={itemsPerPage}
+            className="mt-4"
+          />
+        )}
     </div>
   )
 }

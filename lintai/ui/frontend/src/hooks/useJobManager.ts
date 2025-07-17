@@ -76,7 +76,7 @@ export const useJobManager = (options: UseJobOptions) => {
     refetchInterval: isProcessing ? refetchInterval : false,
     retry: (failureCount, error) => {
       // Only retry network errors, not application errors
-      if (failureCount < 3 && error?.message?.includes('Network Error')) {
+      if (failureCount < 3) {
  
           dispatch(resetJob());
           toast.error(`Error fetching ${jobType} results: ${currentResultError?.detail}`)

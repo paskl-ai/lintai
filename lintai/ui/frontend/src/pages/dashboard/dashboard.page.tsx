@@ -36,6 +36,7 @@ import { toast } from 'react-toastify'
 import { resetJob } from '../../redux/services/ServerStatus/server.status.slice'
 import { StatCard } from '../../components/stateCard/StateCard'
 import { useNavigate } from 'react-router'
+import Pagination from '../../components/pagination/Pagination'
 
 const CustomGraph = lazy(
   async () => import('../../components/graph/CustomGraph'),
@@ -254,38 +255,14 @@ const Dashboard = () => {
     'hourly' | 'daily'
   >('hourly')
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
   const dispatch = useAppDispatch()
   const [expandedFiles, setExpandedFiles] = useState<string[]>([])
 
-  const { data: scans, isFetching: isFetchingScan } = useQuery({
-    queryKey: [QueryKey.JOB + 'scan'],
-    queryFn: async () => {
-      const res = await ScanService.getResults(runId!!)
-      if (res?.data) {
-        dispatch(resetJob())
-        toast.dismiss()
-      }
-      return res
-    },
-    initialData: [],
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3000 : false,
-    enabled: !!runId,
-  })
 
-  const { data: lastscan, isFetching: isFetchingLastScan } = useQuery({
-    queryKey: [QueryKey.JOB + 'last-scan'],
-    queryFn: async () => {
-      const res = await ScanService.getLastResultsByType('scan')
-      return res?.report
-    },
-    initialData: [],
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3000 : false,
-    enabled: !scans?.data?.records,
-  })
+
+
 
   const { data: history, isFetching: isFetchingHistory } = useQuery({
     queryKey: [QueryKey.JOB + 'history'],
@@ -298,6 +275,21 @@ const Dashboard = () => {
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   })
+
+  // Apply client-side pagination
+  const totalItems = history.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedHistory = history.slice(startIndex, endIndex)
+
+  const historyResponse = {
+    items: paginatedHistory,
+    total: totalItems,
+    page: currentPage,
+    limit: itemsPerPage,
+    pages: totalPages
+  }
 
   return (
     <div className="p-6 sm:ml-50 bg-gray-50 ">
@@ -339,10 +331,21 @@ const Dashboard = () => {
           </div>
         ) : (
           <div>
-            {history?.map((item: any, index: number) => (
-              <HistoryItem item={item} index={index} />
+            {paginatedHistory?.map((item: any, index: number) => (
+              <HistoryItem key={item?.run?.run_id || index} item={item} index={index} />
             ))}
           </div>
+        )}
+        
+        {historyResponse && historyResponse.pages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={historyResponse.pages}
+            onPageChange={setCurrentPage}
+            totalItems={historyResponse.total}
+            itemsPerPage={itemsPerPage}
+            className="mt-4"
+          />
         )}
       </div>
     </div>
