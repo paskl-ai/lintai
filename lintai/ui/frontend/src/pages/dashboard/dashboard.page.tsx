@@ -289,65 +289,66 @@ const Dashboard = () => {
     page: currentPage,
     limit: itemsPerPage,
     pages: totalPages
-  }
-
-  // Calculate statistics from actual data
+  }  // Calculate statistics from actual data
   const stats = useMemo(() => {
-    let totalFilesScanned = 0
-    let owaspFindings = 0
-    let mitreFindings = 0
+    let totalAIWorkflowFiles = 0
+    let totalFindings = 0
+    let scanOperations = 0
+    let inventoryOperations = 0
 
     history.forEach((item: any) => {
-      // Count files scanned
-      if (item?.report?.inventory_by_file?.length) {
-        totalFilesScanned += item.report.inventory_by_file.length
+      // Count AI workflow files from inventory data
+      if (item?.type === 'inventory') {
+        inventoryOperations++
+        if (item?.report?.inventory_by_file?.length) {
+          // Count files that actually have AI/ML components
+          item.report.inventory_by_file.forEach((file: any) => {
+            if (file?.components?.length > 0 || file?.frameworks?.length > 0) {
+              totalAIWorkflowFiles++
+            }
+          })
+        }
       }
 
-      // Count findings
-      if (item?.report?.findings?.length) {
-        item.report.findings.forEach((finding: any) => {
-          // Count OWASP findings (you can adjust this logic based on how OWASP is identified)
-          if (finding?.categories?.some((cat: string) => cat.toLowerCase().includes('owasp')) ||
-              finding?.message?.toLowerCase().includes('owasp') ||
-              finding?.rule_id?.toLowerCase().includes('owasp')) {
-            owaspFindings++
-          }
-
-          // Count MITRE findings (you can adjust this logic based on how MITRE is identified)
-          if (finding?.categories?.some((cat: string) => cat.toLowerCase().includes('mitre')) ||
-              finding?.message?.toLowerCase().includes('mitre') ||
-              finding?.rule_id?.toLowerCase().includes('mitre')) {
-            mitreFindings++
-          }
-        })
+      // Count all findings from scan data
+      if (item?.type === 'scan') {
+        scanOperations++
+        if (item?.report?.findings?.length) {
+          totalFindings += item.report.findings.length
+        }
       }
     })
 
     return {
-      totalFilesScanned,
-      owaspFindings,
-      mitreFindings
+      totalAIWorkflowFiles,
+      totalFindings,
+      scanOperations,
+      inventoryOperations
     }
   }, [history])
 
   return (
     <div className="p-6 sm:ml-50 bg-gray-50 ">
       <div className="flex flex-col gap-4 md:flex-row">
-        <div className="flex-1 space-y-6 sm:w-max md:w-2/3">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+        <div className="flex-1 space-y-6 sm:w-max md:w-2/3">          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
           <StatCard
-            label="Total Files Scanned"
-            value={stats.totalFilesScanned}
+            label="Total AI Workflow Files"
+            value={stats.totalAIWorkflowFiles}
             // ={TbScan}
           />
           <StatCard
-            label="Findings with OWASP"
-            value={stats.owaspFindings}
+            label="Total Findings"
+            value={stats.totalFindings}
 
           />
           <StatCard
-            label="Findings with Mitre"
-            value={stats.mitreFindings}
+            label="Security Scans"
+            value={stats.scanOperations}
+
+          />
+          <StatCard
+            label="Inventory Scans"
+            value={stats.inventoryOperations}
 
           />
           </div>
