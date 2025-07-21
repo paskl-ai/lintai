@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ToastContainer, toast } from 'react-toastify'
 import { scanInventoryDTO, ScanService } from '../../api/services/Scan/scan.api';
@@ -82,11 +82,24 @@ interface GroupedInventoryItem {
 // ------------------------------------------------------------------
 
 
-const InventoryRow = ({ item, level = 0 }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
+const InventoryRow = ({ item, level = 0, expandedFolders, setExpandedFolders, highlightedPath }) => {
     const navigate = useNavigate();
-
     const isFolder = item.type === 'folder';
+    const isExpanded = expandedFolders.has(item.path);
+    const isHighlighted = highlightedPath === item.path;
+
+    const handleToggleExpansion = () => {
+        if (isFolder) {
+            const newExpanded = new Set(expandedFolders);
+            if (isExpanded) {
+                newExpanded.delete(item.path);
+            } else {
+                newExpanded.add(item.path);
+            }
+            setExpandedFolders(newExpanded);
+        }
+    };
+
     const handleViewScan = (e) => {
         // e.stopPropagation();
         // toast.info(`Navigating to inventory details for ${item.name}`);
@@ -95,8 +108,8 @@ const InventoryRow = ({ item, level = 0 }) => {
 
     return (
         <div className="text-sm">
-            <div className={`flex items-center hover:bg-gray-50 border-t border-gray-200 ${isFolder ? 'cursor-pointer' : ''}`}
-                 onClick={() => isFolder && setIsExpanded(!isExpanded)}
+            <div className={`flex items-center hover:bg-gray-50 border-t border-gray-200 ${isFolder ? 'cursor-pointer' : ''} ${isHighlighted ? 'bg-blue-50 border-blue-200' : ''}`}
+                 onClick={handleToggleExpansion}
             >
                 <div className="flex-1 p-2.5 flex items-center" style={{ paddingLeft: `${level * 24 + 16}px` }}>
                      <input type="checkbox" className="mr-4" onClick={(e) => e.stopPropagation()} />
@@ -104,7 +117,7 @@ const InventoryRow = ({ item, level = 0 }) => {
                          isExpanded ? <FiChevronDown className="mr-2 text-gray-500"/> : <FiChevronRight className="mr-2 text-gray-500"/>
                      ) : <div className="w-[20px] mr-2"></div>}
                      {isFolder ? <FiFolder className="mr-2 text-blue-500"/> : <FiFileText className="mr-2 text-gray-600"/>}
-                     <span className="font-medium text-gray-800">{item.name}</span>
+                     <span className={`font-medium ${isHighlighted ? 'text-blue-800 font-semibold' : 'text-gray-800'}`}>{item.name}</span>
                 </div>
                 <div className="w-1/3 p-2.5 text-gray-600">{isFolder ? item.path : item.path.substring(0, item.path.lastIndexOf('/'))}</div>
                 <div className="w-1/4 p-2.5 text-gray-600">{formatDate(item.date)}</div>
@@ -113,7 +126,14 @@ const InventoryRow = ({ item, level = 0 }) => {
                 </div>
             </div>
             {isFolder && isExpanded && item.children?.map((child) => (
-                <InventoryRow key={child.path} item={child} level={level + 1} />
+                <InventoryRow
+                    key={child.path}
+                    item={child}
+                    level={level + 1}
+                    expandedFolders={expandedFolders}
+                    setExpandedFolders={setExpandedFolders}
+                    highlightedPath={highlightedPath}
+                />
             ))}
         </div>
     )
@@ -127,6 +147,8 @@ const Inventory = () => {
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [expandedFolders, setExpandedFolders] = useState(new Set());
+  const [highlightedPath, setHighlightedPath] = useState('');
   const configValues = useAppSelector((state) => state.config);
   const dispatch = useAppDispatch();
   const { state } = useLocation();
@@ -186,11 +208,9 @@ const Inventory = () => {
   const inventoryHistory = inventoryHistoryResponse?.items || [];
 
   const groupedAndFilteredData = useMemo(() => {
-    // Use inventory history instead of current state
+    // Always use all inventory history for a comprehensive view
     console.log(state,inventoryHistory,'state data')
-    const historyData = state
-    ? [{ ...state, ...state.report, ...state.run }]
-    : inventoryHistory || [];
+    const historyData = inventoryHistory || [];
      const allFiles = new Map();
 
     // Collect all files from all inventory runs
@@ -289,6 +309,69 @@ const Inventory = () => {
     };
   }, [inventoryHistory]);
 
+  // Handle navigation from dashboard - expand and highlight target folder
+  useEffect(() => {
+    if (state && state.run?.path && groupedAndFilteredData.length > 0) {
+      const targetPath = state.run.path;
+
+      // Find the closest existing folder in the hierarchy
+      const findExistingFolder = (path) => {
+        // Create a flat map of all existing paths in the inventory
+        const existingPaths = new Set();
+
+        const collectPaths = (items) => {
+          items.forEach(item => {
+            existingPaths.add(item.path);
+            if (item.children) {
+              collectPaths(item.children);
+            }
+          });
+        };
+
+        collectPaths(groupedAndFilteredData);
+
+        // Walk up the hierarchy until we find an existing folder
+        const pathParts = path.split('/');
+
+        for (let i = pathParts.length; i > 0; i--) {
+          const currentPath = pathParts.slice(0, i).join('/');
+          if (existingPaths.has(currentPath)) {
+            return currentPath;
+          }
+        }
+
+        return null;
+      };
+
+      const existingFolder = findExistingFolder(targetPath);
+
+      if (existingFolder) {
+        setHighlightedPath(existingFolder);
+
+        // Expand all parent folders leading to the existing folder
+        const pathParts = existingFolder.split('/');
+        const foldersToExpand = new Set();
+
+        for (let i = 1; i <= pathParts.length; i++) {
+          const folderPath = pathParts.slice(0, i).join('/');
+          if (folderPath) {
+            foldersToExpand.add(folderPath);
+          }
+        }
+
+        setExpandedFolders(foldersToExpand);
+      } else {
+        // Fallback: expand all top-level folders
+        setExpandedFolders(new Set(['examples', 'lintai', 'scripts']));
+        setHighlightedPath('');
+      }
+    } else {
+      // Default: expand all top-level folders
+      setExpandedFolders(new Set(['examples', 'lintai', 'scripts']));
+      setHighlightedPath('');
+    }
+  }, [state, groupedAndFilteredData]);
+
   const handleFolderSelection = (path: string) => {
     startScanInventory({ path });
     setIsFileSystemModalOpen(false);
@@ -341,7 +424,15 @@ const Inventory = () => {
 
             {isLoadingHistory ? <p className="p-4 text-center text-gray-500">Loading inventory...</p> : (
                 groupedAndFilteredData.length > 0 ? (
-                     groupedAndFilteredData.map((item: any) => <InventoryRow key={item.path} item={item} />)
+                     groupedAndFilteredData.map((item: any) => (
+                       <InventoryRow
+                         key={item.path}
+                         item={item}
+                         expandedFolders={expandedFolders}
+                         setExpandedFolders={setExpandedFolders}
+                         highlightedPath={highlightedPath}
+                       />
+                     ))
                 ) : (
                     <div className="text-center py-16 text-gray-500">
                         <p className="font-semibold">No Inventory Found</p>
