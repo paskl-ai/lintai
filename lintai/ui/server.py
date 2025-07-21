@@ -57,8 +57,9 @@ ROOT = Path(os.getenv("LINTAI_SRC_CODE_ROOT", Path.cwd()))
 if not ROOT.is_dir():
     raise RuntimeError(f"Workspace root {ROOT} does not exist or is not a directory")
 # ────────────────── persistent workspace ────────────────────
-DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
-DATA_DIR.mkdir(exist_ok=True)
+# Use persistent directory in user's home instead of temp to survive reboots
+DATA_DIR = Path.home() / ".lintai" / "ui"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 RUNS_FILE = DATA_DIR / "runs.json"
 SCAN_HISTORY_FILE = (
@@ -207,11 +208,19 @@ def _env_cli_flags(extra_env: str | None = None) -> list[str]:
     if pref.env_file:
         return ["-e", pref.env_file]
 
-    # 3. Fall back to server's internal config files
+    # 3. Use server's internal config files - need to merge secrets and config
+    env_files = []
+
+    # Always include secrets if it exists (API keys)
     if SECR_ENV.exists():
-        return ["-e", str(SECR_ENV)]
+        env_files.extend(["-e", str(SECR_ENV)])
+
+    # Also include config environment if it exists (other settings)
     if CFG_ENV.exists():
-        return ["-e", str(CFG_ENV)]
+        env_files.extend(["-e", str(CFG_ENV)])
+
+    if env_files:
+        return env_files
 
     # 4. No env file specified - CLI will auto-load .env from working directory
     return []
@@ -392,6 +401,30 @@ def env_set(payload: EnvPayload = Body(...)):
 @app.post("/api/secrets", status_code=204)
 def secrets_set(payload: SecretPayload = Body(...)):
     _write_env(SECR_ENV, payload.model_dump(exclude_none=True))
+
+
+@app.get("/api/secrets/status")
+def secrets_status():
+    """Return which API keys are configured (without revealing the actual keys)"""
+    if not SECR_ENV.exists():
+        return {}
+
+    try:
+        with open(SECR_ENV, "r") as f:
+            lines = f.readlines()
+
+        configured_keys = {}
+        for line in lines:
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                key = line.split("=")[0].strip()
+                # Return True if the key exists and has a non-empty value
+                value = line.split("=", 1)[1].strip()
+                configured_keys[key] = bool(value)
+
+        return configured_keys
+    except Exception:
+        return {}
 
 
 # ─────────── /runs ─────────────

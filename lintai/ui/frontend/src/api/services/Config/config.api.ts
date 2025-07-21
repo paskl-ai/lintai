@@ -28,6 +28,7 @@ export interface SecretPayload {
     AZURE_OPENAI_API_KEY?: string
     ANTHROPIC_API_KEY?: string
     GOOGLE_API_KEY?: string
+    COHERE_API_KEY?: string
 }
 
 class Config {
@@ -58,6 +59,11 @@ async updateEnv (env: EnvPayload){
 
 async updateSecrets(secrets: SecretPayload){
     await api.post("/api/secrets", secrets);
+};
+
+async getSecretsStatus() {
+    const response = await api.get("/api/secrets/status");
+    return response.data;
 };
 
 async getRuns  (){
