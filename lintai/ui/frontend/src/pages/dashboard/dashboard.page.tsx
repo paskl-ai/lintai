@@ -291,20 +291,20 @@ const Dashboard = () => {
     pages: totalPages
   }  // Calculate statistics from actual data
   const stats = useMemo(() => {
-    let totalAIWorkflowFiles = 0
     let totalFindings = 0
     let scanOperations = 0
     let inventoryOperations = 0
+    const uniqueAIFiles = new Set<string>()
 
     history.forEach((item: any) => {
       // Count AI workflow files from inventory data
       if (item?.type === 'inventory') {
         inventoryOperations++
         if (item?.report?.inventory_by_file?.length) {
-          // Count files that actually have AI/ML components
+          // Count unique files that actually have AI/ML components
           item.report.inventory_by_file.forEach((file: any) => {
             if (file?.components?.length > 0 || file?.frameworks?.length > 0) {
-              totalAIWorkflowFiles++
+              uniqueAIFiles.add(file.file_path)
             }
           })
         }
@@ -320,7 +320,7 @@ const Dashboard = () => {
     })
 
     return {
-      totalAIWorkflowFiles,
+      totalAIWorkflowFiles: uniqueAIFiles.size,
       totalFindings,
       scanOperations,
       inventoryOperations
