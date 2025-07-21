@@ -101,8 +101,8 @@ class Scan {
         return response.data;
     }
 
-    async getInventoryHistory() {
-        const response = await api.get('/api/history/inventory');
+    async getInventoryHistory(params?: { page?: number; limit?: number; search?: string }) {
+        const response = await api.get('/api/history/inventory', { params });
         return response.data;
     }
 
