@@ -131,7 +131,7 @@ const Inventory = () => {
   const dispatch = useAppDispatch();
   const { state } = useLocation();
 
-  
+
   // Use job manager for consistent job tracking (but don't fetch last results)
   const { isProcessing } = useJobManager({
     jobType: 'inventory',
@@ -169,7 +169,7 @@ const Inventory = () => {
     onError: (err: any) =>
       toast.error(err.message || 'Failed to start inventory scan.'),
   })
-  
+
 
 
   // Fetch inventory history with pagination
@@ -188,18 +188,18 @@ const Inventory = () => {
   const groupedAndFilteredData = useMemo(() => {
     // Use inventory history instead of current state
     console.log(state,inventoryHistory,'state data')
-    const historyData = state 
-    ? [{ ...state, ...state.report, ...state.run }] 
-    : inventoryHistory || [];   
+    const historyData = state
+    ? [{ ...state, ...state.report, ...state.run }]
+    : inventoryHistory || [];
      const allFiles = new Map();
-    
+
     // Collect all files from all inventory runs
     historyData.forEach(historyEntry => {
       if (historyEntry.inventory_by_file) {
         historyEntry.inventory_by_file.forEach(record => {
           const filePath = record.file_path;
           const existingFile = allFiles.get(filePath);
-          
+
           // Keep the most recent scan for each file
           if (!existingFile || new Date(historyEntry.timestamp) > new Date(existingFile.date)) {
             allFiles.set(filePath, {
@@ -234,11 +234,11 @@ const Inventory = () => {
           currentLevel[part] = file;
         } else {
           if (!currentLevel[part]) {
-            currentLevel[part] = { 
-              name: part, 
-              path: pathParts.slice(0, index + 1).join('/'), 
-              type: 'folder', 
-              children: {} 
+            currentLevel[part] = {
+              name: part,
+              path: pathParts.slice(0, index + 1).join('/'),
+              type: 'folder',
+              children: {}
             };
           }
           currentLevel = currentLevel[part].children;
@@ -246,25 +246,25 @@ const Inventory = () => {
       });
     });
 
-    const toArray = (nodes) => Object.values(nodes).map(node => ({ 
-      ...node, 
-      children: node.children ? toArray(node.children) : undefined 
+    const toArray = (nodes) => Object.values(nodes).map(node => ({
+      ...node,
+      children: node.children ? toArray(node.children) : undefined
     }));
-    
+
     return toArray(root.children);
   }, [inventoryHistory, searchQuery]);
 
   const stats = useMemo(() => {
     const historyData = inventoryHistory || [];
     const allFiles = new Map();
-    
+
     // Get the latest scan for each file from history
     historyData.forEach(historyEntry => {
       if (historyEntry.inventory_by_file) {
         historyEntry.inventory_by_file.forEach(record => {
           const filePath = record.file_path;
           const existingFile = allFiles.get(filePath);
-          
+
           if (!existingFile || new Date(historyEntry.timestamp) > new Date(existingFile.date)) {
             allFiles.set(filePath, {
               ...record,
@@ -274,28 +274,34 @@ const Inventory = () => {
         });
       }
     });
-    
+
     const records = Array.from(allFiles.values());
+
+    // Count only AI workflow files (files with components or frameworks)
+    const aiWorkflowFiles = records.filter(file =>
+      (file.components?.length > 0) || (file.frameworks?.length > 0)
+    );
+
     return {
-      totalFiles: records.length,
+      totalAIWorkflowFiles: aiWorkflowFiles.length,
       totalComponents: records.reduce((acc, file) => acc + (file.components?.length || 0), 0),
-      frameworks: new Set(records.flatMap(file => file.frameworks || [])).size
+      frameworksUsed: new Set(records.flatMap(file => file.frameworks || [])).size
     };
   }, [inventoryHistory]);
 
-  const handleFolderSelection = (path) => {
+  const handleFolderSelection = (path: string) => {
     startScanInventory({ path });
     setIsFileSystemModalOpen(false);
   };
-  
+
   return (
     <div className="bg-gray-50 min-h-screen p-6 sm:ml-50" >
         <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false}/>
         <h1 className="text-3xl font-bold text-gray-800 mb-6">Inventory</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatCard label="Total Files Scanned" value={stats.totalFiles} mainStyle />
+            <StatCard label="Total AI Workflow Files" value={stats.totalAIWorkflowFiles} mainStyle />
             <StatCard label="Total Components" value={stats.totalComponents} />
-            <StatCard label="Frameworks Used" value={stats.frameworks} />
+            <StatCard label="Frameworks Used" value={stats.frameworksUsed} />
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -324,7 +330,7 @@ const Inventory = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Table Header */}
             <div className="flex items-center bg-gray-50 text-xs text-gray-500 uppercase font-medium border-b border-gray-200">
                 <div className="flex-1 p-2.5 flex items-center pl-4"><input type="checkbox" className="mr-4" /> File / Folder Scanned for Inventory</div>
@@ -335,7 +341,7 @@ const Inventory = () => {
 
             {isLoadingHistory ? <p className="p-4 text-center text-gray-500">Loading inventory...</p> : (
                 groupedAndFilteredData.length > 0 ? (
-                     groupedAndFilteredData.map((item) => <InventoryRow key={item.path} item={item} />)
+                     groupedAndFilteredData.map((item: any) => <InventoryRow key={item.path} item={item} />)
                 ) : (
                     <div className="text-center py-16 text-gray-500">
                         <p className="font-semibold">No Inventory Found</p>
@@ -344,7 +350,7 @@ const Inventory = () => {
                 )
             )}
         </div>
-        
+
         {inventoryHistoryResponse && inventoryHistoryResponse.pages > 1 && (
           <Pagination
             currentPage={currentPage}
