@@ -61,8 +61,12 @@ DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
 DATA_DIR.mkdir(exist_ok=True)
 
 RUNS_FILE = DATA_DIR / "runs.json"
-SCAN_HISTORY_FILE = DATA_DIR / "scan_history.json"  # Enhanced scan history with file details
-INVENTORY_HISTORY_FILE = DATA_DIR / "inventory_history.json"  # Enhanced inventory history with file details
+SCAN_HISTORY_FILE = (
+    DATA_DIR / "scan_history.json"
+)  # Enhanced scan history with file details
+INVENTORY_HISTORY_FILE = (
+    DATA_DIR / "inventory_history.json"
+)  # Enhanced inventory history with file details
 CONFIG_JSON = DATA_DIR / "config.json"  # *UI* prefs (depth, log-level …)
 CFG_ENV = DATA_DIR / "config.env"  # non-secret
 SECR_ENV = DATA_DIR / "secrets.env"  # API keys (0600)
@@ -227,40 +231,71 @@ def _common_flags(depth: int | None, log_level: str | None):
 def _kick(cmd: list[str], rid: str, bg: BackgroundTasks):
     def task():
         try:
-            subprocess.run(cmd, check=True)
-            _set_status(rid, "done")
-            
-            # Add to enhanced history when job completes successfully
-            run = next((r for r in _runs() if r.run_id == rid), None)
-            if run:
-                report_path = _report_path(rid, run.type)
-                report = None
-                if report_path.exists():
-                    try:
-                        report = json.loads(report_path.read_text())
-                    except Exception:
-                        pass
-                
-                if run.type == RunType.scan:
-                    _add_scan_history_entry(run, report)
-                elif run.type == RunType.inventory:
-                    _add_inventory_history_entry(run, report)
-                    
-        except subprocess.CalledProcessError as exc:
-            log.error("lintai failed: %s", exc)
+            # Run the command and capture the exit code
+            result = subprocess.run(cmd, check=False)
+
+            # Exit codes 0 and 1 are both considered successful for lintai:
+            # - 0: scan completed with no blocking findings
+            # - 1: scan completed with blocking findings (still a successful scan)
+            # Only exit codes > 1 indicate actual errors
+            if result.returncode <= 1:
+                _set_status(rid, "done")
+
+                # Add to enhanced history when job completes successfully
+                run = next((r for r in _runs() if r.run_id == rid), None)
+                if run:
+                    report_path = _report_path(rid, run.type)
+                    report = None
+                    if report_path.exists():
+                        try:
+                            report = json.loads(report_path.read_text())
+                        except Exception:
+                            pass
+
+                    if run.type == RunType.scan:
+                        _add_scan_history_entry(run, report)
+                    elif run.type == RunType.inventory:
+                        _add_inventory_history_entry(run, report)
+            else:
+                # Only treat exit codes > 1 as actual errors
+                log.error("lintai failed with exit code %d", result.returncode)
+                _set_status(rid, "error")
+
+                # Store error message for failed scans
+                run = next((r for r in _runs() if r.run_id == rid), None)
+                if run:
+                    error_report = {
+                        "error": True,
+                        "error_message": f"Command failed with exit code {result.returncode}",
+                        "errors": [
+                            f"Command failed with exit code {result.returncode}"
+                        ],
+                    }
+                    error_path = _report_path(rid, run.type)
+                    error_path.write_text(json.dumps(error_report))
+
+                    # Add to history with error info
+                    if run.type == RunType.scan:
+                        _add_scan_history_entry(run, error_report)
+                    elif run.type == RunType.inventory:
+                        _add_inventory_history_entry(run, error_report)
+
+        except Exception as exc:
+            # Handle any other exceptions (e.g., file not found, permission errors)
+            log.error("lintai execution failed: %s", exc)
             _set_status(rid, "error")
-            
+
             # Store error message for failed scans
             run = next((r for r in _runs() if r.run_id == rid), None)
             if run:
                 error_report = {
                     "error": True,
                     "error_message": str(exc),
-                    "errors": [str(exc)]
+                    "errors": [str(exc)],
                 }
                 error_path = _report_path(rid, run.type)
                 error_path.write_text(json.dumps(error_report))
-                
+
                 # Add to history with error info
                 if run.type == RunType.scan:
                     _add_scan_history_entry(run, error_report)
@@ -445,7 +480,7 @@ def history():
 def scan_history(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
-    search: str | None = Query(None, description="Search query for filtering")
+    search: str | None = Query(None, description="Search query for filtering"),
 ):
     """
     Fetch the history of all scan runs as a list of items (similar to /api/history but scan-only).
@@ -459,18 +494,18 @@ def scan_history(
         # Only include scan type runs
         if run.type != RunType.scan:
             continue
-            
+
         report_path = _report_path(run.run_id, run.type)
         report = None
         errors = None
         scanned_path = None
         findings_by_file = {}
-        
+
         if report_path.exists():
             report = json.loads(report_path.read_text())
             errors = report.get("errors", None)
             scanned_path = report.get("scanned_path")
-            
+
             # Group findings by file for easy access
             if "findings" in report:
                 for finding in report["findings"]:
@@ -478,57 +513,65 @@ def scan_history(
                     if file_path not in findings_by_file:
                         findings_by_file[file_path] = []
                     findings_by_file[file_path].append(finding)
-        
+
         # Only include scans that have actual findings
         if not findings_by_file:
             continue
-        
+
         # Get error message for failed scans
         error_message = None
         if run.status == "error" and report:
             error_message = report.get("error_message", "Unknown error occurred")
-        
-        scan_history.append({
-            "run_id": run.run_id,
-            "type": run.type,
-            "timestamp": run.created.isoformat(),
-            "scanned_path": scanned_path or run.path,
-            "status": run.status,
-            "errors": errors,
-            "error_message": error_message,
-            "findings_by_file": findings_by_file,
-            "total_findings": len(report.get("findings", [])) if report else 0,
-            "run": run.model_dump(),
-            "report": report,
-        })
-    
+
+        scan_history.append(
+            {
+                "run_id": run.run_id,
+                "type": run.type,
+                "timestamp": run.created.isoformat(),
+                "scanned_path": scanned_path or run.path,
+                "status": run.status,
+                "errors": errors,
+                "error_message": error_message,
+                "findings_by_file": findings_by_file,
+                "total_findings": len(report.get("findings", [])) if report else 0,
+                "run": run.model_dump(),
+                "report": report,
+            }
+        )
+
     # Sort by timestamp, most recent first
     scan_history.sort(key=lambda x: x["timestamp"], reverse=True)
-    
+
     # Apply search filter if provided
     if search:
         search_lower = search.lower()
         scan_history = [
-            entry for entry in scan_history
-            if (search_lower in entry["scanned_path"].lower() or
-                search_lower in entry["run_id"].lower() or
-                any(search_lower in file_path.lower() for file_path in entry["findings_by_file"].keys()))
+            entry
+            for entry in scan_history
+            if (
+                search_lower in entry["scanned_path"].lower()
+                or search_lower in entry["run_id"].lower()
+                or any(
+                    search_lower in file_path.lower()
+                    for file_path in entry["findings_by_file"].keys()
+                )
+            )
         ]
-    
+
     total = len(scan_history)
     pages = (total + limit - 1) // limit
-    
+
     # Apply pagination
     start = (page - 1) * limit
     end = start + limit
     items = scan_history[start:end]
-    
+
     return {
         "items": items,
         "total": total,
         "page": page,
         "limit": limit,
-        "pages": pages
+        "pages": pages,
     }
 
 
@@ -537,16 +580,16 @@ def scan_history(
 def inventory_history(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
-    search: str | None = Query(None, description="Search query for filtering")
+    search: str | None = Query(None, description="Search query for filtering"),
 ):
     """
     Fetch the history of all inventory runs with file-level breakdown.
     """
     history = _load_inventory_history()
-    
+
     if not history:
         return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 0}
-    
+
     # Apply search filter if provided
     if search:
         search_lower = search.lower()
@@ -554,37 +597,39 @@ def inventory_history(
         for entry in history:
             # Check if search matches any field in the entry
             matches = (
-                search_lower in entry.get("scanned_path", "").lower() or
-                search_lower in entry.get("run_id", "").lower()
+                search_lower in entry.get("scanned_path", "").lower()
+                or search_lower in entry.get("run_id", "").lower()
             )
-            
+
             # Also check inventory_by_file for matches
             if not matches and "inventory_by_file" in entry:
                 for file_record in entry["inventory_by_file"]:
-                    if (search_lower in file_record.get("file_path", "").lower() or
-                        any(search_lower in framework.lower() for framework in file_record.get("frameworks", []))):
+                    if search_lower in file_record.get("file_path", "").lower() or any(
+                        search_lower in framework.lower()
+                        for framework in file_record.get("frameworks", [])
+                    ):
                         matches = True
                         break
-            
+
             if matches:
                 filtered_history.append(entry)
-        
+
         history = filtered_history
-    
+
     total = len(history)
     pages = (total + limit - 1) // limit
-    
+
     # Apply pagination
     start = (page - 1) * limit
     end = start + limit
     items = history[start:end]
-    
+
     return {
         "items": items,
         "total": total,
         "page": page,
         "limit": limit,
-        "pages": pages
+        "pages": pages,
     }
 
 
@@ -795,14 +840,15 @@ else:
 def _load_scan_history() -> list[dict]:
     return _json_load(SCAN_HISTORY_FILE, [])
 
+
 def _add_scan_history_entry(run: RunSummary, report: dict):
     """Add a scan entry with file-level breakdown and update existing files"""
     history = _load_scan_history()
-    
+
     # Extract file-level findings
     findings_by_file = {}
     scanned_files = set()
-    
+
     if report and "findings" in report:
         for finding in report["findings"]:
             file_path = finding.get("location", "unknown")
@@ -810,13 +856,13 @@ def _add_scan_history_entry(run: RunSummary, report: dict):
             if file_path not in findings_by_file:
                 findings_by_file[file_path] = []
             findings_by_file[file_path].append(finding)
-    
+
     # Remove older entries for files that are being rescanned
     updated_history = []
     for existing_entry in history:
         # Check if this entry contains any files that are being rescanned
         existing_files = set(existing_entry.get("findings_by_file", {}).keys())
-        
+
         # If there's no overlap with scanned files, keep the entry
         # If there's overlap, we need to remove the overlapping files from this entry
         if not scanned_files.intersection(existing_files):
@@ -824,11 +870,13 @@ def _add_scan_history_entry(run: RunSummary, report: dict):
         else:
             # Remove overlapping files from this entry
             filtered_findings = {
-                file_path: findings 
-                for file_path, findings in existing_entry.get("findings_by_file", {}).items()
+                file_path: findings
+                for file_path, findings in existing_entry.get(
+                    "findings_by_file", {}
+                ).items()
                 if file_path not in scanned_files
             }
-            
+
             # Only keep the entry if it still has files after filtering
             if filtered_findings:
                 existing_entry["findings_by_file"] = filtered_findings
@@ -836,7 +884,7 @@ def _add_scan_history_entry(run: RunSummary, report: dict):
                     len(findings) for findings in filtered_findings.values()
                 )
                 updated_history.append(existing_entry)
-    
+
     # Create new entry with the latest scan results
     new_entry = {
         "run_id": run.run_id,
@@ -848,41 +896,43 @@ def _add_scan_history_entry(run: RunSummary, report: dict):
         "report_summary": {
             "scanned_path": report.get("scanned_path") if report else None,
             "llm_usage": report.get("llm_usage") if report else None,
-            "errors": report.get("errors") if report else None
-        }
+            "errors": report.get("errors") if report else None,
+        },
     }
-    
+
     # Add the new entry at the end (most recent position)
     updated_history.append(new_entry)
-    
+
     # Keep only last 100 entries
     if len(updated_history) > 100:
         updated_history = updated_history[-100:]
-    
+
     _json_dump(SCAN_HISTORY_FILE, updated_history)
+
 
 def _load_inventory_history() -> list[dict]:
     return _json_load(INVENTORY_HISTORY_FILE, [])
 
+
 def _add_inventory_history_entry(run: RunSummary, report: dict):
     """Add an inventory entry with file-level breakdown and update existing files"""
     history = _load_inventory_history()
-    
+
     # Extract file-level inventory
     inventory_by_file = report.get("inventory_by_file", []) if report else []
-    
+
     # Track which files are being updated in this scan
     scanned_files = set(file_inv.get("file_path") for file_inv in inventory_by_file)
-    
+
     # Remove older entries for files that are being rescanned
     updated_history = []
     for existing_entry in history:
         # Check if this entry contains any files that are being rescanned
         existing_files = set(
-            file_inv.get("file_path") 
+            file_inv.get("file_path")
             for file_inv in existing_entry.get("inventory_by_file", [])
         )
-        
+
         # If there's no overlap with scanned files, keep the entry
         # If there's overlap, we need to remove the overlapping files from this entry
         if not scanned_files.intersection(existing_files):
@@ -890,25 +940,28 @@ def _add_inventory_history_entry(run: RunSummary, report: dict):
         else:
             # Remove overlapping files from this entry
             filtered_inventory = [
-                file_inv for file_inv in existing_entry.get("inventory_by_file", [])
+                file_inv
+                for file_inv in existing_entry.get("inventory_by_file", [])
                 if file_inv.get("file_path") not in scanned_files
             ]
-            
+
             # Only keep the entry if it still has files after filtering
             if filtered_inventory:
                 existing_entry["inventory_by_file"] = filtered_inventory
                 existing_entry["total_files"] = len(filtered_inventory)
                 existing_entry["total_components"] = sum(
-                    len(file_inv.get("components", [])) 
+                    len(file_inv.get("components", []))
                     for file_inv in filtered_inventory
                 )
-                existing_entry["frameworks_found"] = list(set(
-                    framework 
-                    for file_inv in filtered_inventory 
-                    for framework in file_inv.get("frameworks", [])
-                ))
+                existing_entry["frameworks_found"] = list(
+                    set(
+                        framework
+                        for file_inv in filtered_inventory
+                        for framework in file_inv.get("frameworks", [])
+                    )
+                )
                 updated_history.append(existing_entry)
-    
+
     # Create new entry with the latest scan results
     new_entry = {
         "run_id": run.run_id,
@@ -917,22 +970,29 @@ def _add_inventory_history_entry(run: RunSummary, report: dict):
         "status": run.status,
         "total_files": len(inventory_by_file),
         "inventory_by_file": inventory_by_file,
-        "frameworks_found": list(set(
-            framework 
-            for file_inv in inventory_by_file 
-            for framework in file_inv.get("frameworks", [])
-        )) if inventory_by_file else [],
-        "total_components": sum(
-            len(file_inv.get("components", [])) 
-            for file_inv in inventory_by_file
-        ) if inventory_by_file else 0,
+        "frameworks_found": (
+            list(
+                set(
+                    framework
+                    for file_inv in inventory_by_file
+                    for framework in file_inv.get("frameworks", [])
+                )
+            )
+            if inventory_by_file
+            else []
+        ),
+        "total_components": (
+            sum(len(file_inv.get("components", [])) for file_inv in inventory_by_file)
+            if inventory_by_file
+            else 0
+        ),
     }
-    
+
     # Add the new entry at the end (most recent position)
     updated_history.append(new_entry)
-    
+
     # Keep only last 100 entries
     if len(updated_history) > 100:
         updated_history = updated_history[-100:]
-    
+
     _json_dump(INVENTORY_HISTORY_FILE, updated_history)

@@ -90,6 +90,7 @@ lintai ui                     # REST docs at http://localhost:8501/api/docs
 LLM-powered rules collect the **full source** of functions that call AI frameworks, plus their caller chain **across multiple files**, and ask an external LLM to classify OWASP risks.
 
 The enhanced analysis includes:
+
 - **Cross-file call tracking** – detectors see how functions in one file call AI functions in another
 - **Caller context** – LLM prompts include snippets from calling functions to provide better security analysis
 - **Call-flow context** – both direct callers and callees are included for comprehensive risk assessment
@@ -100,13 +101,13 @@ Budget checks run _before_ the call; actual usage is recorded afterwards.
 
 ## 🔧 Common flags
 
-| Flag              | Description                                        |
-| ----------------- | -------------------------------------------------- |
-| `-l DEBUG`        | Verbose logging                                    |
-| `--ruleset <dir>` | Load custom YAML/JSON rules                       |
-| `--output <file>` | Write full JSON report instead of stdout          |
+| Flag              | Description                                          |
+| ----------------- | ---------------------------------------------------- |
+| `-l DEBUG`        | Verbose logging                                      |
+| `--ruleset <dir>` | Load custom YAML/JSON rules                          |
+| `--output <file>` | Write full JSON report instead of stdout             |
 | `--graph`         | Include call-graph visualization data (ai-inventory) |
-| `--ai-call-depth` | How many caller layers to trace for relationships |
+| `--ai-call-depth` | How many caller layers to trace for relationships    |
 
 ---
 

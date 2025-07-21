@@ -119,7 +119,10 @@ def scan_cmd(
     if output:
         typer.echo(f"\n✅ Report written to {output}")
 
-    # Exit with an error code if there are blocking findings
+    # Exit codes for lintai scan command:
+    # - 0: scan completed successfully with no blocking findings
+    # - 1: scan completed successfully but found blocking/critical findings
+    # Note: The UI server treats both 0 and 1 as successful scan completion
     if any(f.severity in ("blocker", "critical") for f in findings):
         raise typer.Exit(1)
 
