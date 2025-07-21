@@ -1,12 +1,12 @@
 import { createSlice } from '@reduxjs/toolkit'
 import type { Draft, PayloadAction } from '@reduxjs/toolkit'
-import { JobStatus, ScanType } from '../../../api/services/types'
+import { JobStatus, AnalysisType } from '../../../api/services/types'
 
 interface IInitialState {
   isProcessing: boolean
   jobStatus: JobStatus
   jobId?: string
-  jobType?: ScanType
+  jobType?: AnalysisType
   progress?: number
   error?: string
 }
@@ -31,7 +31,7 @@ export const serverStatusSlice = createSlice({
       action: PayloadAction<{
         jobId: string
         jobStatus?: JobStatus
-        jobType?: ScanType
+        jobType?: AnalysisType
         progress?: number
       }>,
     ) => {
@@ -54,7 +54,7 @@ export const serverStatusSlice = createSlice({
       state.jobStatus = action.payload.status
       state.progress = action.payload.progress
       state.error = action.payload.error
-      
+
       if (
         action.payload.status === 'completed' ||
         action.payload.status === 'failed' ||

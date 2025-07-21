@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------
- *  Scan.page.tsx
- *  Completely refactored to use the <Table /> component (shared with
- *  server‑list) instead of the old “Sonar” accordion layout.
+ *  Findings.page.tsx
+ *  Completely refactored to use the <Table /> component (shared with
+ *  server‑list) instead of the old "Sonar" accordion layout.
  * ------------------------------------------------------------------- */
 
 import React, { useEffect, useMemo, useState } from 'react'
@@ -12,10 +12,10 @@ import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router'
 
 import {
-  scanInventoryDTO,
-  ScanService,
-  startScanDTO,
-} from '../../api/services/Scan/scan.api'
+  catalogAiDTO,
+  AnalysisService,
+  findIssuesDTO,
+} from '../../api/services/Scan/analysis.api'
 import CommonButton from '../../components/buttons/CommonButton'
 import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
 import FileSystemPage from '../filesystem/filesystem.page'
@@ -181,7 +181,7 @@ const FindingRow = ({
 
 
 
-const Scan = () => {
+const Findings = () => {
   const dispatch = useAppDispatch()
   const [severityFilter, setSeverityFilter] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -192,21 +192,21 @@ const Scan = () => {
 
   // Use job manager for consistent job tracking (but don't fetch last results)
   const { isProcessing } = useJobManager({
-    jobType: 'scan',
+    jobType: 'find_issues',
     enableLastResultFetch: false,
     onJobComplete: (result, resultPath) => {
       // Additional actions when job completes
-      console.log('Scan completed, result path:', resultPath);
+      console.log('Security analysis completed, result path:', resultPath);
     },
     onJobError: (error) => {
-      toast.error(error.message || 'Failed to complete scan.');
+      toast.error(error.message || 'Failed to complete security analysis.');
     }
   });
 
   // Fetch scan history with pagination
   const { data: scanHistoryResponse, isLoading: isLoadingHistory } = useQuery({
     queryKey: ['scan-history', currentPage, itemsPerPage, searchQuery],
-    queryFn: () => ScanService.getScanHistory({
+    queryFn: () => AnalysisService.getFindingsHistory({
       page: currentPage,
       limit: itemsPerPage,
       search: searchQuery || undefined
@@ -216,18 +216,18 @@ const Scan = () => {
 
   const scanHistory = scanHistoryResponse?.items || [];
 
-  
+
 
   const { mutate: startScanMutation, isPending: isStartingScan } = useMutation({
-    mutationFn: (body) => ScanService.startScan(body),
+    mutationFn: (body) => AnalysisService.findIssues(body),
     onSuccess: (res) => {
-      toast.loading(`Scanning...`)
+      toast.loading(`Analyzing security...`)
       if (res?.run_id) {
-        dispatch(startJob({ jobId: res.run_id, jobStatus: 'starting', jobType: 'scan' }))
+        dispatch(startJob({ jobId: res.run_id, jobStatus: 'starting', jobType: 'find_issues' }))
       }
     },
     onError: (error) => {
-      toast.error(error.message || 'Failed to start scan.')
+      toast.error(error.message || 'Failed to start security analysis.')
     },
   })
 
@@ -240,7 +240,7 @@ const Scan = () => {
     // Use scan history instead of current state
     const historyData = scanHistory || [];
     const allFindings = [];
-    
+
     // Collect all findings from all scan runs
     historyData.forEach(historyEntry => {
       if (historyEntry?.findings_by_file) {
@@ -279,14 +279,14 @@ const Scan = () => {
     }, {} as Record<string, Finding[]>);
 
     const root: GroupedFinding = { type: 'folder', name: 'root', path: '/', children: [] };
-    
+
     Object.entries(filesMap).forEach(([fullPath, findingsInFile]) => {
         const parts = fullPath.split('/');
         let currentNode = root;
 
         parts.forEach((part, index) => {
             const currentPath = parts.slice(0, index + 1).join('/');
-            if (index === parts.length - 1) { 
+            if (index === parts.length - 1) {
                  if (!currentNode.children) currentNode.children = [];
                 currentNode.children.push({
                     type: 'file',
@@ -294,7 +294,7 @@ const Scan = () => {
                     path: fullPath,
                     findings: findingsInFile,
                 });
-            } else { 
+            } else {
                 if (!currentNode.children) currentNode.children = [];
                 let childNode = currentNode.children.find(child => child.path === currentPath);
                 if (!childNode) {
@@ -318,7 +318,7 @@ const Scan = () => {
   const severityCounts = useMemo(() => {
     const historyData = scanHistory || [];
     const allFindings = [];
-    
+
     // Get all findings from scan history
     historyData.forEach(historyEntry => {
       if (historyEntry?.findings_by_file) {
@@ -341,7 +341,7 @@ const Scan = () => {
   const totalFindings = useMemo(() => {
     const historyData = scanHistory || [];
     let count = 0;
-    
+
     historyData.forEach(historyEntry => {
       if (historyEntry?.findings_by_file) {
         Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
@@ -363,7 +363,7 @@ const Scan = () => {
       <main className="flex-1 p-6">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Scan Results</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Security Findings</h1>
             <p className="text-gray-600 mt-1">Review security findings and vulnerabilities in your codebase.</p>
           </div>
           <div className="flex items-center gap-2">
@@ -375,7 +375,7 @@ const Scan = () => {
               disabled={isStartingScan || isProcessing}
             >
               <FiSearch className="mr-2" />
-              <span>Scan for Findings</span>
+              <span>Find Security Issues</span>
             </CommonButton>
           </div>
         </header>
@@ -406,7 +406,7 @@ const Scan = () => {
             />
           ))}
         </div>
-        
+
         <div className="bg-white rounded-lg border border-gray-200">
              <div className="p-4 flex items-center justify-between border-b border-gray-200">
                 <div className="relative w-full max-w-sm">
@@ -441,7 +441,7 @@ const Scan = () => {
                     ))}
                 </div>
              </div>
-        
+
             {isLoadingData ? (
                 <FindingsSkeleton />
             ) : groupedAndFilteredData.length === 0 ? (
@@ -460,7 +460,7 @@ const Scan = () => {
                 </div>
             )}
         </div>
-        
+
         {scanHistoryResponse && scanHistoryResponse.pages > 1 && (
           <Pagination
             currentPage={currentPage}
@@ -479,4 +479,4 @@ const Scan = () => {
 
 
 
-export default Scan
+export default Findings

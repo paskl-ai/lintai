@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ToastContainer, toast } from 'react-toastify'
-import { scanInventoryDTO, ScanService } from '../../api/services/Scan/scan.api';
+import { catalogAiDTO, AnalysisService } from '../../api/services/Scan/analysis.api';
 import FileSystemPage from '../filesystem/filesystem.page';
 import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo';
 import { startJob } from '../../redux/services/ServerStatus/server.status.slice';
@@ -103,7 +103,7 @@ const InventoryRow = ({ item, level = 0, expandedFolders, setExpandedFolders, hi
     const handleViewScan = (e) => {
         // e.stopPropagation();
         // toast.info(`Navigating to inventory details for ${item.name}`);
-        navigate(`/inventory/details/${encodeURIComponent(item.path)}`, { state: item });
+        navigate(`/catalog/details/${encodeURIComponent(item.path)}`, { state: item });
     }
 
     return (
@@ -156,25 +156,25 @@ const Inventory = () => {
 
   // Use job manager for consistent job tracking (but don't fetch last results)
   const { isProcessing } = useJobManager({
-    jobType: 'inventory',
+    jobType: 'catalog_ai',
     enableLastResultFetch: false,
     onJobComplete: (result, resultPath) => {
       // Additional actions when job completes
-      console.log('Inventory scan completed, result path:', resultPath);
+      console.log('AI catalog completed, result path:', resultPath);
     },
     onJobError: (error) => {
-      toast.error(error.message || 'Failed to complete inventory scan.');
+      toast.error(error.message || 'Failed to complete AI catalog.');
     }
   });
 
   /* ------------------------------ Mutation ----------------------- */
-  const { mutate: startScanInventory, isPending: isStartingScan } = useMutation({
-    mutationFn: async (body: scanInventoryDTO) =>
-      await ScanService.scanInventory(body),
+  const { mutate: startCatalogAi, isPending: isStartingCatalog } = useMutation({
+    mutationFn: async (body: catalogAiDTO) =>
+      await AnalysisService.catalogAi(body),
     onSuccess: (res, data) => {
       toast.loading(
-        `Scanning path: ${
-          (data as scanInventoryDTO)?.path || configValues?.config?.sourcePath
+        `Cataloging AI components in: ${
+          (data as catalogAiDTO)?.path || configValues?.config?.sourcePath
         }`,
       )
 
@@ -183,13 +183,13 @@ const Inventory = () => {
           startJob({
             jobId: res.run_id as any,
             jobStatus: 'starting',
-            jobType: 'inventory',
+            jobType: 'catalog_ai',
           }),
         )
       }
     },
     onError: (err: any) =>
-      toast.error(err.message || 'Failed to start inventory scan.'),
+      toast.error(err.message || 'Failed to start AI catalog.'),
   })
 
 
@@ -197,7 +197,7 @@ const Inventory = () => {
   // Fetch inventory history with pagination
   const { data: inventoryHistoryResponse, isLoading: isLoadingHistory } = useQuery({
     queryKey: ['inventory-history', currentPage, itemsPerPage, searchQuery],
-    queryFn: () => ScanService.getInventoryHistory({
+    queryFn: () => AnalysisService.getCatalogHistory({
       page: currentPage,
       limit: itemsPerPage,
       search: searchQuery || undefined
@@ -209,7 +209,6 @@ const Inventory = () => {
 
   const groupedAndFilteredData = useMemo(() => {
     // Always use all inventory history for a comprehensive view
-    console.log(state,inventoryHistory,'state data')
     const historyData = inventoryHistory || [];
      const allFiles = new Map();
 
@@ -373,14 +372,14 @@ const Inventory = () => {
   }, [state, groupedAndFilteredData]);
 
   const handleFolderSelection = (path: string) => {
-    startScanInventory({ path });
+    startCatalogAi({ path });
     setIsFileSystemModalOpen(false);
   };
 
   return (
     <div className="bg-gray-50 min-h-screen p-6 sm:ml-50" >
         <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false}/>
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Inventory</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">AI Catalog</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatCard label="Total AI Workflow Files" value={stats.totalAIWorkflowFiles} mainStyle />
             <StatCard label="Total Components" value={stats.totalComponents} />
@@ -397,9 +396,9 @@ const Inventory = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     <CommonButton onClick={() => setIsFileSystemModalOpen(true)}
-                                  loading={isProcessing || isStartingScan} disabled={isProcessing || isStartingScan}
+                                  loading={isProcessing || isStartingCatalog} disabled={isProcessing || isStartingCatalog}
                                   className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center shadow-sm hover:bg-blue-700 transition-colors disabled:bg-blue-300">
-                        Scan for Inventory
+                        Catalog AI Components
                     </CommonButton>
                     {/* <button className="text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-100">Actions</button> */}
                     <ConfigurationInfo />
@@ -416,13 +415,13 @@ const Inventory = () => {
 
             {/* Table Header */}
             <div className="flex items-center bg-gray-50 text-xs text-gray-500 uppercase font-medium border-b border-gray-200">
-                <div className="flex-1 p-2.5 flex items-center pl-4"><input type="checkbox" className="mr-4" /> File / Folder Scanned for Inventory</div>
+                <div className="flex-1 p-2.5 flex items-center pl-4"><input type="checkbox" className="mr-4" /> File / Folder Cataloged for AI Components</div>
                 <div className="w-1/3 p-2.5">Location</div>
                 <div className="w-1/4 p-2.5">Date Scanned</div>
                 <div className="w-1/6 p-2.5 text-right pr-4">Action</div>
             </div>
 
-            {isLoadingHistory ? <p className="p-4 text-center text-gray-500">Loading inventory...</p> : (
+            {isLoadingHistory ? <p className="p-4 text-center text-gray-500">Loading AI catalog...</p> : (
                 groupedAndFilteredData.length > 0 ? (
                      groupedAndFilteredData.map((item: any) => (
                        <InventoryRow
@@ -435,8 +434,8 @@ const Inventory = () => {
                      ))
                 ) : (
                     <div className="text-center py-16 text-gray-500">
-                        <p className="font-semibold">No Inventory Found</p>
-                        <p className="text-sm mt-1">Run a scan to build your inventory.</p>
+                        <p className="font-semibold">No AI Components Found</p>
+                        <p className="text-sm mt-1">Run a catalog to find AI components in your codebase.</p>
                     </div>
                 )
             )}

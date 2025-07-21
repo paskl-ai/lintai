@@ -1,6 +1,6 @@
 export type JobStatus = 'pending' | 'starting' | 'running' | 'completed' | 'failed' | 'stopped';
 
-export type ScanType = 'scan' | 'inventory';
+export type AnalysisType = 'find_issues' | 'catalog_ai';
 
 export interface JobResult {
   run_id: string;
@@ -10,27 +10,27 @@ export interface JobResult {
   error?: string;
 }
 
-export interface ScanJobResult extends JobResult {
-  data?: ScanReport;
-  report?: ScanReport;
+export interface FindingsJobResult extends JobResult {
+  data?: FindingsReport;
+  report?: FindingsReport;
   findings?: Finding[];
 }
 
-export interface InventoryJobResult extends JobResult {
-  data?: InventoryReport;
-  report?: InventoryReport;
+export interface CatalogJobResult extends JobResult {
+  data?: CatalogReport;
+  report?: CatalogReport;
 }
 
-export interface ScanReport {
+export interface FindingsReport {
   findings: Finding[];
-  summary?: ScanSummary;
-  metadata?: ScanMetadata;
+  summary?: FindingsSummary;
+  metadata?: AnalysisMetadata;
 }
 
-export interface InventoryReport {
+export interface CatalogReport {
   inventory_by_file: InventoryRecord[];
-  summary?: InventorySummary;
-  metadata?: ScanMetadata;
+  summary?: CatalogSummary;
+  metadata?: AnalysisMetadata;
 }
 
 export interface Finding {
@@ -59,7 +59,7 @@ export interface InventoryRecord {
   }[];
 }
 
-export interface ScanSummary {
+export interface FindingsSummary {
   total_findings: number;
   critical_count: number;
   high_count: number;
@@ -68,32 +68,32 @@ export interface ScanSummary {
   files_scanned: number;
 }
 
-export interface InventorySummary {
+export interface CatalogSummary {
   total_files: number;
   total_components: number;
   frameworks_count: number;
   unique_frameworks: string[];
 }
 
-export interface ScanMetadata {
-  scan_type: ScanType;
-  scanned_path: string;
-  scan_duration: number;
+export interface AnalysisMetadata {
+  analysis_type: AnalysisType;
+  analyzed_path: string;
+  analysis_duration: number;
   timestamp: string;
   depth?: number;
   log_level?: string;
 }
 
-export interface LastScanResult {
-  type: ScanType;
+export interface LastAnalysisResult {
+  type: AnalysisType;
   date: string;
-  scanned_path: string;
+  analyzed_path: string;
   errors?: string[];
-  report: ScanReport | InventoryReport;
+  report: FindingsReport | CatalogReport;
 }
 
 export interface UseJobOptions {
-  jobType: ScanType;
+  jobType: AnalysisType;
   enableLastResultFetch?: boolean;
   refetchInterval?: number;
   onJobComplete?: (result: any, resultPath?: string) => void;
@@ -104,7 +104,7 @@ export interface JobState {
   isProcessing: boolean;
   jobId?: string;
   jobStatus: JobStatus;
-  currentResult?: ScanJobResult | InventoryJobResult;
-  lastResult?: LastScanResult;
+  currentResult?: FindingsJobResult | CatalogJobResult;
+  lastResult?: LastAnalysisResult;
   error?: string;
 }

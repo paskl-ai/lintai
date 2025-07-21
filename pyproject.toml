@@ -1,7 +1,7 @@
 [project]
 name = "lintai"
 version = "0.0.1"
-description = "Shift-left LLM security scanner"
+description = "Shift-left LLM security analyzer"
 requires-python = ">=3.10"
 authors = [{ name = "Harsh Parandekar", email = "harsh.parandekar@paskl.ai" }]
 license = { text = "Apache-2.0" }

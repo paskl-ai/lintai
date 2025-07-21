@@ -2,13 +2,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { useAppDispatch, useAppSelector } from '../redux/services/store';
 import { resetJob, updateJobStatus } from '../redux/services/ServerStatus/server.status.slice';
-import { ScanService } from '../api/services/Scan/scan.api';
-import { UseJobOptions, ScanType, JobState } from '../api/services/types';
+import { AnalysisService } from '../api/services/Scan/analysis.api';
+import { UseJobOptions, AnalysisType, JobState } from '../api/services/types';
 
 export const useJobManager = (options: UseJobOptions) => {
-  const { 
-    jobType, 
-    enableLastResultFetch = true, 
+  const {
+    jobType,
+    enableLastResultFetch = true,
     refetchInterval = 3000,
     onJobComplete,
     onJobError
@@ -19,32 +19,32 @@ export const useJobManager = (options: UseJobOptions) => {
   const { jobId: runId, isProcessing } = useAppSelector(state => state.serverStatus);
 
   // Query for fetching current job results (polling while job is active)
-  const { 
-    data: currentResult, 
+  const {
+    data: currentResult,
     isFetching: isFetchingCurrentResult,
-    error: currentResultError 
+    error: currentResultError
   } = useQuery({
     queryKey: ['job'+jobType, jobType, runId],
     queryFn: async () => {
       if (!runId) return null;
-      
-      const result = await ScanService.getResults(runId);
-      
+
+      const result = await AnalysisService.getResults(runId);
+
       // Check if job is complete - both scan and inventory have data when complete
-      const hasData = result?.data || result?.report || 
-                     (result as any)?.findings || 
+      const hasData = result?.data || result?.report ||
+                     (result as any)?.findings ||
                      (result as any)?.inventory_by_file ||
                      (result as any)?.findings_by_file;
-      
+
       if (hasData) {
         toast.dismiss();
-        
+
         const jobRunId = result?.run_id || runId;
-        const resultPath = jobType === 'scan' ? `/findings/${jobRunId}` : `/inventory/${jobRunId}`;
-        
+        const resultPath = jobType === 'find_issues' ? `/findings/${jobRunId}` : `/catalog/${jobRunId}`;
+
         // Show completion toast with option to view results
         toast.success(
-          `${jobType === 'scan' ? 'Scan' : 'Inventory scan'} completed successfully! Click to view results.`,
+          `${jobType === 'find_issues' ? 'Findings analysis' : 'AI catalog'} completed successfully! Click to view results.`,
           {
             autoClose: 8000,
             onClick: () => {
@@ -52,23 +52,23 @@ export const useJobManager = (options: UseJobOptions) => {
             }
           }
         );
-        
+
         // Reset job state
         dispatch(resetJob());
-        
+
         // Trigger completion callback with result path for additional navigation
         if (onJobComplete) {
           onJobComplete(result, resultPath);
         }
-        
+
         // Invalidate last result query to refetch
         queryClient.invalidateQueries({ queryKey: ['last-result', jobType] });
-        
+
         // Also invalidate history queries to update the lists
         queryClient.invalidateQueries({ queryKey: ['scan-history'] });
         queryClient.invalidateQueries({ queryKey: ['inventory-history'] });
       }
-      
+
       return result;
     },
     enabled: !!runId && isProcessing,
@@ -77,10 +77,10 @@ export const useJobManager = (options: UseJobOptions) => {
     retry: (failureCount, error) => {
       // Only retry network errors, not application errors
       if (failureCount < 3) {
- 
+
           dispatch(resetJob());
           toast.error(`Error fetching ${jobType} results: ${currentResultError?.detail}`)
-   
+
 
         return true;
       }
@@ -90,13 +90,13 @@ export const useJobManager = (options: UseJobOptions) => {
 
 
   // Query for fetching last scan results (shown when no active job)
-  const { 
-    data: lastResult, 
+  const {
+    data: lastResult,
     isLoading: isLoadingLastResult,
-    error: lastResultError 
+    error: lastResultError
   } = useQuery({
     queryKey: ['last-result', jobType],
-    queryFn: () => ScanService.getLastResultsByType(jobType),
+    queryFn: () => AnalysisService.getLastResultsByType(jobType),
     enabled: enableLastResultFetch && !isProcessing,
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000 // 5 minutes
@@ -109,8 +109,8 @@ export const useJobManager = (options: UseJobOptions) => {
 
   // Extract the actual report/data from the result
   const report = (activeResult as any)?.report || (activeResult as any)?.data || null;
-  const findings = jobType === 'scan' ? (report?.findings || []) : [];
-  const inventory = jobType === 'inventory' ? (report?.inventory_by_file || []) : [];
+  const findings = jobType === 'find_issues' ? (report?.findings || []) : [];
+  const inventory = jobType === 'catalog_ai' ? (report?.inventory_by_file || []) : [];
 
   // Job state summary
   const jobState: JobState = {
@@ -133,22 +133,22 @@ export const useJobManager = (options: UseJobOptions) => {
     report,
     findings,
     inventory,
-    
+
     // Loading states
     isLoading,
     isFetchingCurrentResult,
     isLoadingLastResult,
-    
+
     // Job state
     jobState,
     isProcessing,
-    
+
     // Errors
     error,
-    
+
     // Utilities
     invalidateQueries,
-    
+
     // Raw results for advanced use cases
     currentResult,
     lastResult,

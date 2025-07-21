@@ -8,20 +8,20 @@ from lintai.llm.budget import manager as _budget
 
 
 # --- Report creation functions ---
-def make_scan_report(findings: List[Finding], scanned_path: str) -> dict:
+def make_findings_report(findings: List[Finding], analyzed_path: str) -> dict:
     return {
-        "type": "scan",
-        "scanned_path": scanned_path,
+        "type": "find_issues",
+        "analyzed_path": analyzed_path,
         "llm_usage": _budget.snapshot(),
         "findings": [f.to_dict() for f in findings],
     }
 
 
-def make_graph_inventory_report(graph_records: list[dict], scanned_path: str) -> dict:
+def make_graph_inventory_report(graph_records: list[dict], analyzed_path: str) -> dict:
     return {
-        "type": "inventory",
+        "type": "catalog_ai",
         "version": 1,
-        "scanned_path": scanned_path,
+        "analyzed_path": analyzed_path,
         "data": {
             "records": graph_records,
             "nodes": [n for r in graph_records for n in r["elements"]["nodes"]],
@@ -30,12 +30,12 @@ def make_graph_inventory_report(graph_records: list[dict], scanned_path: str) ->
     }
 
 
-def make_simple_inventory_report(inventory: Any, scanned_path: str) -> dict:
+def make_simple_inventory_report(inventory: Any, analyzed_path: str) -> dict:
     if isinstance(inventory, dict):
         inventory = dict(inventory)  # copy
-        inventory["scanned_path"] = scanned_path
+        inventory["analyzed_path"] = analyzed_path
         return inventory
-    return {"type": "inventory", "scanned_path": scanned_path, "data": inventory}
+    return {"type": "catalog_ai", "analyzed_path": analyzed_path, "data": inventory}
 
 
 # --- Report output functions ---

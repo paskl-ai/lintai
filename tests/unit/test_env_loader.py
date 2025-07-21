@@ -9,7 +9,7 @@ def test_env_file_loading(tmp_path):
     src.write_text("print('hi')")
 
     res = subprocess.run(
-        ["lintai", "scan", str(src), "-e", str(env)],
+        ["lintai", "find-issues", str(src), "-e", str(env)],
         capture_output=True,
         text=True,
     )

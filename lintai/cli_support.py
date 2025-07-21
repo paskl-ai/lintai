@@ -69,7 +69,7 @@ def iter_python_files(root: Path, ignore_spec: pathspec.PathSpec) -> Iterable[Pa
 
 
 def maybe_load_env(env_path: Path | None) -> None:
-    """best-effort .env reader (identical logic used by scan / inventory)."""
+    """best-effort .env reader (identical logic used by find-issues / catalog-ai)."""
     if env_path is not None:
         # Explicit env file specified
         target = env_path

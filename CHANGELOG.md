@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Multi-file CLI support**: Both `scan` and `ai-inventory` commands now accept multiple files and directories as arguments
+- **Multi-file CLI support**: Both `find-issues` and `catalog-ai` commands now accept multiple files and directories as arguments
 - **Cross-file analysis**: Enhanced analysis engine tracks function calls and AI usage patterns across file boundaries
 - **Enhanced LLM detector context**: LLM-powered detectors now receive caller/callee context from other files for improved security analysis
 - **Call-flow context in prompts**: LLM audit prompts include snippets from calling functions across files
@@ -25,9 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Usage Examples
 
-- `lintai scan file1.py file2.py directory/`
-- `lintai ai-inventory examples/ --graph`
-- `lintai scan examples/main.py examples/chatbot.py -l DEBUG`
+- `lintai find-issues file1.py file2.py directory/`
+- `lintai catalog-ai examples/ --graph`
+- `lintai find-issues examples/main.py examples/chatbot.py -l DEBUG`
 
 ## [0.0.2] - 2025-06-29
 
@@ -63,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core static analysis engine for AI/LLM code
 - OWASP LLM Top-10 detectors
 - OpenAI, Anthropic, Gemini, Cohere LLM provider support
-- CLI commands: `scan`, `ai-inventory`, `ui`
+- CLI commands: `find-issues`, `catalog-ai`, `ui`
 - REST API with FastAPI backend
 - Budget management and token tracking
 - DSL for custom rules

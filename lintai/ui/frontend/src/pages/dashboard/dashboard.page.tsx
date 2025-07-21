@@ -30,7 +30,7 @@ import {
 import Spinner from '../../components/Spinner'
 import Skeleton from '../../components/skeleton/Skeleton'
 import { QueryKey } from '../../api/QueryKey'
-import { ScanService } from '../../api/services/Scan/scan.api'
+import { AnalysisService } from '../../api/services/Scan/analysis.api'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { toast } from 'react-toastify'
 import { resetJob } from '../../redux/services/ServerStatus/server.status.slice'
@@ -91,11 +91,11 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
 const navigate=useNavigate()
   const toggleExpand = () =>{
 
-    if(item.type == 'scan') {
+    if(item.type == 'find_issues') {
       setIsExpanded(!isExpanded)
     }
     else{
-      navigate(`/inventory/${encodeURIComponent(item?.run?.run_id)}`, { state: item });
+      navigate(`/catalog/${encodeURIComponent(item?.run?.run_id)}`, { state: item });
 
     }
 
@@ -140,7 +140,7 @@ const navigate=useNavigate()
           {getStatusIcon(item?.run?.status)}
           <div>
             <p className="text-lg font-semibold text-gray-800 capitalize">
-              {item?.type=='scan' ? 'Finding' : 'Inventory'}
+              {item?.type=='find_issues' ? 'Finding' : 'AI Catalog'}
               <span className="font-mono bg-gray-100 px-2 py-1 rounded">
                 {item?.run?.path}
               </span>
@@ -157,7 +157,7 @@ const navigate=useNavigate()
                 ? 'bg-red-100 text-red-800'
                 : 'bg-green-100 text-green-800'
             }`}>
-            {findingsCount} {item?.type!=='scan'?"Files analysed":'Findings'}
+            {findingsCount} {item?.type!=='find-issues'?"Files analysed":'Findings'}
           </span>
           <button className="text-gray-500 hover:text-gray-700">
             {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
@@ -165,7 +165,7 @@ const navigate=useNavigate()
         </div>
       </div>
 
-      {isExpanded&&item?.type=='scan' && (
+      {isExpanded && item?.type=='find_issues' && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
@@ -237,7 +237,7 @@ const navigate=useNavigate()
                 )}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No findings for this scan.</p>
+              <p className="text-sm text-gray-500">No findings for this analysis.</p>
             )}
           </div>
         </div>
@@ -267,7 +267,7 @@ const Dashboard = () => {
   const { data: history, isFetching: isFetchingHistory } = useQuery({
     queryKey: [QueryKey.JOB + 'history'],
     queryFn: async () => {
-      const res = await ScanService.getHistory()
+      const res = await AnalysisService.getHistory()
       // Sort by date with latest entries at top
       return res.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
     },
@@ -298,7 +298,7 @@ const Dashboard = () => {
 
     history.forEach((item: any) => {
       // Count AI workflow files from inventory data
-      if (item?.type === 'inventory') {
+      if (item?.type === 'catalog_ai') {
         inventoryOperations++
         if (item?.report?.inventory_by_file?.length) {
           // Count unique files that actually have AI/ML components
@@ -311,7 +311,7 @@ const Dashboard = () => {
       }
 
       // Count all findings from scan data
-      if (item?.type === 'scan') {
+      if (item?.type === 'find_issues') {
         scanOperations++
         if (item?.report?.findings?.length) {
           totalFindings += item.report.findings.length
@@ -337,17 +337,17 @@ const Dashboard = () => {
             // ={TbScan}
           />
           <StatCard
-            label="Total Findings"
+            label="Total Security Findings"
             value={stats.totalFindings}
 
           />
           <StatCard
-            label="Security Scans"
+            label="Security Analysis"
             value={stats.scanOperations}
 
           />
           <StatCard
-            label="Inventory Scans"
+            label="AI Catalog Runs"
             value={stats.inventoryOperations}
 
           />

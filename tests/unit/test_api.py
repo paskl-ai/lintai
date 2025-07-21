@@ -70,18 +70,18 @@ def test_config_roundtrip(client):
 
 # util to drop fake reports
 def _fake_report(rid: str, kind: str):
-    if kind == "scan":
-        fp = ui.DATA_DIR / rid / "scan_report.json"
+    if kind == "find_issues":
+        fp = ui.DATA_DIR / rid / "findings_report.json"
         data = {
-            "type": "scan",
+            "type": "find_issues",
             "llm_usage": {},
             "findings": [{"severity": "high"}],
         }
     else:
         fp = (
-            ui.DATA_DIR / rid / "inventory.json"
+            ui.DATA_DIR / rid / "catalog.json"
         )  # Updated to match new backend structure
-        data = {"type": "inventory", "data": {"nodes": [{"id": "A"}], "edges": []}}
+        data = {"data": {"nodes": [{"id": "A"}], "edges": []}}
     fp.parent.mkdir(parents=True, exist_ok=True)
     fp.write_text(json.dumps(data))
     logging.debug(f"_fake_report wrote to {fp.resolve()}: {fp.read_text()}")
@@ -93,32 +93,34 @@ def test_full_flow(client, monkeypatch, tmp_path):
 
     code = tmp_path / "bot.py"
     code.write_text("print('x')")
-    r1 = client.post("/api/scan", files={"files": ("bot.py", code.read_bytes())}).json()
-    r2 = client.post("/api/inventory", params={"path": str(tmp_path)}).json()
+    r1 = client.post(
+        "/api/find-issues", files={"files": ("bot.py", code.read_bytes())}
+    ).json()
+    r2 = client.post("/api/catalog-ai", params={"path": str(tmp_path)}).json()
 
     runs = client.get("/api/runs").json()
     assert {runs[0]["run_id"], runs[1]["run_id"]} == {r1["run_id"], r2["run_id"]}
 
-    _fake_report(r1["run_id"], "scan")
-    _fake_report(r2["run_id"], "inventory")
+    _fake_report(r1["run_id"], "find_issues")
+    _fake_report(r2["run_id"], "catalog")
 
     # Print the path the server will read for debugging
     logging.debug(
-        f"server expects scan report at: {ui.DATA_DIR / r1['run_id'] / 'scan_report.json'}"
+        f"server expects findings report at: {ui.DATA_DIR / r1['run_id'] / 'findings_report.json'}"
     )
     logging.debug(
-        f"server expects inventory report at: {ui.DATA_DIR / r2['run_id'] / 'inventory.json'}"
+        f"server expects catalog report at: {ui.DATA_DIR / r2['run_id'] / 'catalog.json'}"
     )
 
-    assert client.get(f"/api/results/{r1['run_id']}").json()["type"] == "scan"
-    assert client.get(f"/api/results/{r2['run_id']}").json()["type"] == "inventory"
+    assert client.get(f"/api/results/{r1['run_id']}").json()["type"] == "find_issues"
+    assert client.get(f"/api/results/{r2['run_id']}").json()["type"] == "catalog"
 
     assert client.get(
         f"/api/results/{r1['run_id']}/filter", params={"severity": "high"}
     ).json()["findings"]
 
     assert client.get(
-        f"/api/inventory/{r2['run_id']}/subgraph", params={"node": "A"}
+        f"/api/catalog/{r2['run_id']}/subgraph", params={"node": "A"}
     ).json()["nodes"] == [{"id": "A"}]
 
 

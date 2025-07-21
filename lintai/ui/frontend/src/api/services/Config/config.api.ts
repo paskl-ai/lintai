@@ -71,19 +71,19 @@ async getRuns  (){
     return response.data;
 };
 
-async startScan (formData: FormData){
-    const response = await api.post("/api/scan", formData, {
+async findIssues (formData: FormData){
+    const response = await api.post("/api/find-issues", formData, {
         headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
 };
 
-async startInventory (params: {
+async catalogAi (params: {
     path?: string;
     depth?: number;
     log_level?: string;
 }){
-    const response = await api.post("/api/inventory", null, { params });
+    const response = await api.post("/api/catalog-ai", null, { params });
     return response.data;
 };
 
@@ -105,7 +105,7 @@ async getSubgraph (
     node: string,
     depth: number
 ) {
-    const response = await api.get(`/inventory/${runId}/subgraph`, {
+    const response = await api.get(`/api/catalog/${runId}/subgraph`, {
         params: { node, depth },
     });
     return response.data;

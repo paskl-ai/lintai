@@ -35,17 +35,17 @@ pre-commit install
 pytest
 ```
 
-1. Try a scan:
+1. Try finding issues:
 
 ```bash
 # Single directory
-lintai scan examples/
+lintai find-issues examples/
 
 # Test multi-file analysis
-lintai scan examples/main.py examples/chatbot.py -l DEBUG
+lintai find-issues examples/main.py examples/chatbot.py -l DEBUG
 
 # Generate call graph
-lintai ai-inventory examples/ --graph
+lintai catalog-ai examples/ --graph
 ```
 
 ---
@@ -58,24 +58,24 @@ When working on multi-file analysis features:
 
 ```bash
 # Verify cross-file call tracking works
-lintai scan examples/main.py examples/chatbot.py -l DEBUG
+lintai find-issues examples/main.py examples/chatbot.py -l DEBUG
 
 # Check that caller context appears in LLM prompts
 grep -A 5 "CALL-FLOW CONTEXT" <debug-output>
 ```
 
-2. **Validate call graph export**:
+1. **Validate call graph export**:
 
 ```bash
 # Generate graph and inspect edges
-lintai ai-inventory examples/ --graph -o test.json
+lintai catalog-ai examples/ --graph -o test.json
 jq '.graph.edges[] | select(.data.source | contains("main"))' test.json
 ```
 
-3. **Test mixed file/directory arguments**:
+1. **Test mixed file/directory arguments**:
 
 ```bash
-lintai scan examples/main.py examples/agents/ --output mixed-test.json
+lintai find-issues examples/main.py examples/agents/ --output mixed-test.json
 ```
 
 ---

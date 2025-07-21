@@ -1,5 +1,5 @@
 ###################################################################################
-#  Example .lintaiignore file to ignore directories/files in scanned source code  #
+#  Example .lintaiignore file to ignore directories/files in analyzed source code  #
 ###################################################################################
 
 # ignore common virtual‑env / build output

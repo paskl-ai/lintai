@@ -76,10 +76,10 @@ def top_callback(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# scan  -----------------------------------------------------------------------
+# find-issues  ---------------------------------------------------------------
 # ──────────────────────────────────────────────────────────────────────────────
-@app.command("scan", help="Run all detectors and emit findings JSON.")
-def scan_cmd(
+@app.command("find-issues", help="Run all detectors and emit findings JSON.")
+def find_issues_cmd(
     ctx: Context,
     paths: List[Path] = Argument(..., help="Files or directories to analyse"),
     ruleset: Path | None = Option(
@@ -113,13 +113,13 @@ def scan_cmd(
 
     # Save full report with LLM usage - use first path for report name
     path_for_report = str(paths[0]) if paths else "unknown"
-    report_data = report.make_scan_report(findings, path_for_report)
+    report_data = report.make_findings_report(findings, path_for_report)
     report.write_report_obj(report_data, output)
 
     if output:
         typer.echo(f"\n✅ Report written to {output}")
 
-    # Exit codes for lintai scan command:
+    # Exit codes for lintai find-issues command:
     # - 0: scan completed successfully with no blocking findings
     # - 1: scan completed successfully but found blocking/critical findings
     # Note: The UI server treats both 0 and 1 as successful scan completion
@@ -285,10 +285,10 @@ def create_graph_payload(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ai-inventory  ----------------------------------------------------------------
+# catalog-ai  ----------------------------------------------------------------
 # ──────────────────────────────────────────────────────────────────────────────
-@app.command("ai-inventory", help="Emit a unified JSON inventory of all AI components.")
-def ai_inventory_cmd(
+@app.command("catalog-ai", help="Emit a unified JSON inventory of all AI components.")
+def catalog_ai_cmd(
     ctx: Context,
     paths: List[Path] = Argument(..., help="Files or directories to analyse"),
     ruleset: Path = Option(None, "--ruleset", "-r", help="Custom rule file/folder"),

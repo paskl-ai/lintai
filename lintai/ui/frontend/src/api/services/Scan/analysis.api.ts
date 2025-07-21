@@ -1,23 +1,23 @@
 import api from "../../Api"
 import {
-  ScanJobResult,
-  InventoryJobResult,
-  LastScanResult,
-  ScanType,
+  FindingsJobResult,
+  CatalogJobResult,
+  LastAnalysisResult,
+  AnalysisType,
   JobResult,
-  ScanReport,
-  InventoryReport
+  FindingsReport,
+  CatalogReport
 } from "../types"
 
-export interface scanInventoryDTO {path: string, depth?: number, logLevel?: string}
-export interface startScanDTO {path: string, depth?: number, logLevel?: string}
-class Scan {
+export interface catalogAiDTO {path: string, depth?: number, logLevel?: string}
+export interface findIssuesDTO {path: string, depth?: number, logLevel?: string}
+class Analysis {
     async getRuns() {
-        const response = await api.get('/api/runs') // Updated endpoint
+        const response = await api.get('/api/runs')
         return response.data
     }
 
-    async startScan(body: startScanDTO, files?: File[]): Promise<JobResult> {
+    async findIssues(body: findIssuesDTO, files?: File[]): Promise<JobResult> {
         const formData = new FormData();
 
         if (files && files.length > 0) {
@@ -38,18 +38,18 @@ class Scan {
             ? `?path=${encodeURIComponent(body?.path)}`
             : '';
 
-        const response = await api.post(`/api/scan${query}`, formData);
+        const response = await api.post(`/api/find-issues${query}`, formData);
         return response.data;
     }
 
 
-    async scanInventory(body:scanInventoryDTO): Promise<JobResult> {
+    async catalogAi(body:catalogAiDTO): Promise<JobResult> {
         const params = {
             path:body.path,
             depth:body.depth,
             log_level: body.logLevel,
         }
-        const response = await api.post('/api/inventory', null, { params }) // Updated endpoint
+        const response = await api.post('/api/catalog-ai', null, { params })
         return response.data
     }
 
@@ -59,34 +59,34 @@ class Scan {
         return response.data
     }
 
-    async getResults(runId: string): Promise<ScanJobResult | InventoryJobResult> {
-        const response = await api.get(`/api/results/${runId}`) // Updated endpoint
+    async getResults(runId: string): Promise<FindingsJobResult | CatalogJobResult> {
+        const response = await api.get(`/api/results/${runId}`)
         return response.data
     }
 
-    async getLastResults(): Promise<LastScanResult> {
-        const response = await api.get(`/api/last-result`) // Updated endpoint
+    async getLastResults(): Promise<LastAnalysisResult> {
+        const response = await api.get(`/api/last-result`)
         return response.data
     }
 
-    async getLastResultsByType(type: ScanType): Promise<LastScanResult> {
-        const response = await api.get(`/api/last-result/${type}`) // Get last result by type
+    async getLastResultsByType(type: AnalysisType): Promise<LastAnalysisResult> {
+        const response = await api.get(`/api/last-result/${type}`)
         return response.data
     }
 
-    async getHistory(): Promise<LastScanResult[]> {
-        const response = await api.get('/api/history'); // Updated endpoint for history
+    async getHistory(): Promise<LastAnalysisResult[]> {
+        const response = await api.get('/api/history');
         return response.data.map((item: any) => ({
             type: item.type,
             date: item.date,
-            scanned_path: item.scanned_path,
+            analyzed_path: item.analyzed_path,
             errors: item.errors,
             report: item.report,
             run:item.run
         }));
     }
 
-    async getScanHistory(params?: {
+    async getFindingsHistory(params?: {
         page?: number;
         limit?: number;
         search?: string;
@@ -97,12 +97,12 @@ class Scan {
         limit: number;
         pages: number;
     }> {
-        const response = await api.get('/api/history/scans', { params });
+        const response = await api.get('/api/history/findings', { params });
         return response.data;
     }
 
-    async getInventoryHistory(params?: { page?: number; limit?: number; search?: string }) {
-        const response = await api.get('/api/history/inventory', { params });
+    async getCatalogHistory(params?: { page?: number; limit?: number; search?: string }) {
+        const response = await api.get('/api/history/catalog', { params });
         return response.data;
     }
 
@@ -110,9 +110,9 @@ class Scan {
         await api.delete('/api/history/clear');
     }
 
-    async stopScan(runId: string) {
-        // No equivalent endpoint provided for stopping a scan
-        throw new Error('stopScan endpoint is not defined in the provided API list.')
+    async stopAnalysis(runId: string) {
+        // No equivalent endpoint provided for stopping an analysis
+        throw new Error('stopAnalysis endpoint is not defined in the provided API list.')
     }
 
     async deleteRun(runId: string) {
@@ -121,4 +121,4 @@ class Scan {
     }
 }
 
-export const ScanService = new Scan()
+export const AnalysisService = new Analysis()

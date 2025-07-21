@@ -1,4 +1,4 @@
-# 🧪 Examples for Lintai Scanning
+# 🧪 Examples for Lintai Analysis
 
 This folder contains **intentionally insecure and illustrative examples** designed to demonstrate how Lintai detects GenAI-related risks.
 
@@ -27,20 +27,20 @@ They are here to showcase vulnerabilities such as:
 
 ## ✅ Safe usage
 
-Run the Lintai scanner on this folder to see how issues are reported:
+Run the Lintai analyzer on this folder to see how issues are reported:
 
 ```bash
-# Scan entire directory
-lintai scan examples/
+# Find issues in entire directory
+lintai find-issues examples/
 
-# Scan specific files (demonstrates cross-file analysis)
-lintai scan examples/main.py examples/chatbot.py
+# Analyze specific files (demonstrates cross-file analysis)
+lintai find-issues examples/main.py examples/chatbot.py
 
 # Generate inventory with call graph
-lintai ai-inventory examples/ --graph --output inventory.json
+lintai catalog-ai examples/ --graph --output inventory.json
 
 # Multiple files with debug output
-lintai scan examples/main.py examples/chatbot.py examples/agents/ -l DEBUG
+lintai find-issues examples/main.py examples/chatbot.py examples/agents/ -l DEBUG
 ```
 
 ### Cross-file Analysis Example

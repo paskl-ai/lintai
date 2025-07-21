@@ -13,8 +13,8 @@
 ## ✨ Key features
 
 - **Two analysis commands with multi-file support**
-  - `lintai ai-inventory <files-or-dirs>...` – list every AI call and its caller chain across multiple files
-  - `lintai scan <files-or-dirs>...` – run all detectors on multiple files/directories, emit JSON (with _llm_usage_ summary)
+  - `lintai catalog-ai <files-or-dirs>...` – list every AI call and its caller chain across multiple files
+  - `lintai find-issues <files-or-dirs>...` – run all detectors on multiple files/directories, emit JSON (with _llm_usage_ summary)
 - **Cross-file analysis** – tracks function calls and AI usage patterns across file boundaries
 - **LLM budget guard-rails** – hard caps on requests / tokens / cost (`LINTAI_MAX_LLM_*`)
 - **Enhanced call-flow context** – LLM detectors receive caller/callee context from other files for better analysis
@@ -66,15 +66,15 @@ Lintai auto-loads `.env`; the UI writes the same file, so CLI & browser stay in 
 
 ```bash
 # Single file or directory
-lintai ai-inventory src/ --ai-call-depth 4
-lintai scan src/
+lintai catalog-ai src/ --ai-call-depth 4
+lintai find-issues src/
 
 # Multiple files and directories
-lintai scan file1.py file2.py src/ tests/
-lintai ai-inventory examples/main.py examples/chatbot.py --graph
+lintai find-issues file1.py file2.py src/ tests/
+lintai catalog-ai examples/main.py examples/chatbot.py --graph
 
 # Mixed arguments work too
-lintai scan examples/main.py examples/agents/ --output report.json
+lintai find-issues examples/main.py examples/agents/ --output report.json
 ```
 
 ### 4 · Launch REST server (Optional, React UI coming soon)
@@ -106,12 +106,12 @@ Budget checks run _before_ the call; actual usage is recorded afterwards.
 | `-l DEBUG`        | Verbose logging                                      |
 | `--ruleset <dir>` | Load custom YAML/JSON rules                          |
 | `--output <file>` | Write full JSON report instead of stdout             |
-| `--graph`         | Include call-graph visualization data (ai-inventory) |
+| `--graph`         | Include call-graph visualization data (catalog-ai) |
 | `--ai-call-depth` | How many caller layers to trace for relationships    |
 
 ---
 
-## 🧪 Sample `scan` output
+## 🧪 Sample `find-issues` output
 
 ```json
 {
@@ -159,10 +159,10 @@ examples/ Sample code with insecure AI usage
 | `POST /api/config`       | `ConfigModel` JSON   | Update settings (path, depth …)     |
 | `GET /POST /api/env`     | `EnvPayload` JSON    | Read / update non-secret .env       |
 | `POST /api/secrets`      | `SecretPayload` JSON | Store API key (write-only)          |
-| `POST /api/scan`         | multipart files      | Run detectors on uploaded code      |
-| `POST /api/inventory`    | `path=<dir>`         | Inventory run on server-side folder |
+| `POST /api/find-issues`  | multipart files      | Run detectors on uploaded code      |
+| `POST /api/catalog-ai`   | `path=<dir>`         | Inventory run on server-side folder |
 | `GET  /api/runs`         | –                    | List all runs + status              |
-| `GET  /api/results/{id}` | –                    | Fetch scan / inventory report       |
+| `GET  /api/results/{id}` | –                    | Fetch findings / inventory report   |
 
 Auto-generated OpenAPI docs live at **`/api/docs`**.
 

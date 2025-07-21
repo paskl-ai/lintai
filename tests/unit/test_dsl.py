@@ -28,7 +28,7 @@ def test_secret_in_prompt_finding(tmp_path):
     result = subprocess.run(
         [
             "lintai",
-            "scan",
+            "find-issues",
             str(tmp_path),
             "--log-level",
             "DEBUG",

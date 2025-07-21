@@ -367,7 +367,11 @@ class ProjectAnalyzer:
         self.units = list(units)
         self.call_depth = call_depth
         # directory shared by *all* source files – used for nice mod-names
-        self.root = Path(os.path.commonpath(u.path for u in self.units))
+        if self.units:
+            self.root = Path(os.path.commonpath(u.path for u in self.units))
+        else:
+            # If no Python files found, use current working directory
+            self.root = Path.cwd()
 
         # AI call analysis state
         self._trackers: dict[Path, _ImportTracker] = {}
@@ -400,6 +404,11 @@ class ProjectAnalyzer:
 
     def analyze(self) -> "ProjectAnalyzer":
         """Main entry point - run both phases and build component inventories."""
+        # Handle empty units gracefully (no Python files to analyze)
+        if not self.units:
+            self.log.info("No Python files found to analyze")
+            return self
+
         self._phase_one()
         self._phase_two()
         self._propagate_ai_tags()
