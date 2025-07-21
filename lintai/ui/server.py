@@ -427,6 +427,57 @@ def secrets_status():
         return {}
 
 
+# ─────────── clear all history ─────
+@app.delete("/api/history/clear", status_code=204)
+def clear_all_history():
+    """
+    Clear all scan/inventory history and results while preserving user config and secrets.
+    This removes:
+    - runs.json (run history)
+    - scan_history.json (scan history)
+    - inventory_history.json (inventory history)
+    - file_index.json (file index)
+    - All individual result directories (UUID folders)
+
+    Preserves:
+    - config.env (user configuration)
+    - secrets.env (API keys)
+    """
+    import shutil
+
+    try:
+        # Remove history files
+        for file_path in [RUNS_FILE, SCAN_HISTORY_FILE, INVENTORY_HISTORY_FILE]:
+            if file_path.exists():
+                file_path.unlink()
+                log.info(f"Removed {file_path}")
+
+        # Remove file index if it exists
+        file_index_path = DATA_DIR / "file_index.json"
+        if file_index_path.exists():
+            file_index_path.unlink()
+            log.info(f"Removed {file_index_path}")
+
+        # Remove all UUID result directories
+        for item in DATA_DIR.iterdir():
+            if item.is_dir() and len(item.name) == 36:  # UUID length check
+                try:
+                    # Validate it's actually a UUID format
+                    uuid.UUID(item.name)
+                    shutil.rmtree(item)
+                    log.info(f"Removed result directory {item}")
+                except (ValueError, OSError) as e:
+                    log.warning(f"Failed to remove directory {item}: {e}")
+
+        log.info("Successfully cleared all history and results")
+
+    except Exception as e:
+        log.error(f"Error clearing history: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to clear history: {str(e)}"
+        )
+
+
 # ─────────── /runs ─────────────
 @app.get("/api/runs", response_model=list[RunSummary])
 def runs():

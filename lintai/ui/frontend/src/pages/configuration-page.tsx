@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ConfigDTO, ConfigService, EnvPayload } from '../api/services/Config/config.api'
+import { ScanService } from '../api/services/Scan/scan.api'
 import { QueryKey } from '../api/QueryKey'
 import { useAppDispatch, useAppSelector } from '../redux/services/store'
 import { setConfig, setEnv } from '../redux/services/Config/config.slice'
@@ -148,6 +149,25 @@ const ConfigurationPage: React.FC = () => {
       },
   })
 
+  const { mutate: clearHistory, isPending: isClearingHistory } = useMutation({
+      mutationFn: async () => {
+          return await ScanService.clearHistory()
+      },
+      onSuccess: () => {
+          alert('All scan history and results have been cleared successfully!')
+          // Refresh all history-related queries
+          queryClient.invalidateQueries({ queryKey: ['runs'] })
+          queryClient.invalidateQueries({ queryKey: ['scan_history'] })
+          queryClient.invalidateQueries({ queryKey: ['inventory_history'] })
+          queryClient.invalidateQueries({ queryKey: ['history'] })
+          queryClient.invalidateQueries({ queryKey: [QueryKey.JOB + 'history'] })
+          queryClient.invalidateQueries({ queryKey: ['inventory-history'] })
+      },
+      onError: (error: any) => {
+          alert(error.message || 'Failed to clear history.')
+      },
+  })
+
   const handleSave = () => {
     const configDto: ConfigDTO = {
       source_path: sourcePath,
@@ -207,6 +227,19 @@ const ConfigurationPage: React.FC = () => {
   const handleFolderSelection = (path: string) => {
     setSourcePath(path)
     setIsFsModalOpen(false)
+  }
+
+  const handleClearHistory = () => {
+      if (window.confirm(
+          'Are you sure you want to clear ALL scan history and results? This action cannot be undone.\n\n' +
+          'This will remove:\n' +
+          '• All scan and inventory history\n' +
+          '• All result files and reports\n' +
+          '• File index\n\n' +
+          'Your configuration and API keys will be preserved.'
+      )) {
+          clearHistory()
+      }
   }
 
   return (
@@ -539,6 +572,26 @@ const ConfigurationPage: React.FC = () => {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Danger Zone Section */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold border-b pb-2 mb-4 text-red-800">Danger Zone</h2>
+
+        <div className="border border-red-200 rounded-lg p-4 bg-red-50">
+          <h3 className="text-md font-medium text-red-800 mb-2">Clear All History</h3>
+          <p className="text-sm text-red-700 mb-3">
+            Clear all scan history and results. This will remove all previous scans, inventory data, and reports,
+            but will preserve your configuration and API keys.
+          </p>
+          <button
+            onClick={handleClearHistory}
+            disabled={isClearingHistory}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isClearingHistory ? 'Clearing...' : 'Clear All History'}
+          </button>
+        </div>
       </section>
 
       {/* Save Button */}

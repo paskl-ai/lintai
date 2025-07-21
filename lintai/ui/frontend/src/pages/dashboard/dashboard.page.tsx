@@ -98,7 +98,7 @@ const navigate=useNavigate()
       navigate(`/inventory/${encodeURIComponent(item?.run?.run_id)}`, { state: item });
 
     }
-    
+
     }
 
   const getStatusIcon = (status: string) => {
@@ -291,6 +291,45 @@ const Dashboard = () => {
     pages: totalPages
   }
 
+  // Calculate statistics from actual data
+  const stats = useMemo(() => {
+    let totalFilesScanned = 0
+    let owaspFindings = 0
+    let mitreFindings = 0
+
+    history.forEach((item: any) => {
+      // Count files scanned
+      if (item?.report?.inventory_by_file?.length) {
+        totalFilesScanned += item.report.inventory_by_file.length
+      }
+
+      // Count findings
+      if (item?.report?.findings?.length) {
+        item.report.findings.forEach((finding: any) => {
+          // Count OWASP findings (you can adjust this logic based on how OWASP is identified)
+          if (finding?.categories?.some((cat: string) => cat.toLowerCase().includes('owasp')) ||
+              finding?.message?.toLowerCase().includes('owasp') ||
+              finding?.rule_id?.toLowerCase().includes('owasp')) {
+            owaspFindings++
+          }
+
+          // Count MITRE findings (you can adjust this logic based on how MITRE is identified)
+          if (finding?.categories?.some((cat: string) => cat.toLowerCase().includes('mitre')) ||
+              finding?.message?.toLowerCase().includes('mitre') ||
+              finding?.rule_id?.toLowerCase().includes('mitre')) {
+            mitreFindings++
+          }
+        })
+      }
+    })
+
+    return {
+      totalFilesScanned,
+      owaspFindings,
+      mitreFindings
+    }
+  }, [history])
+
   return (
     <div className="p-6 sm:ml-50 bg-gray-50 ">
       <div className="flex flex-col gap-4 md:flex-row">
@@ -298,18 +337,18 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
           <StatCard
             label="Total Files Scanned"
-            value={20}
+            value={stats.totalFilesScanned}
             // ={TbScan}
           />
           <StatCard
             label="Findings with OWASP"
-            value={12}
-       
+            value={stats.owaspFindings}
+
           />
           <StatCard
             label="Findings with Mitre"
-            value={6}
-   
+            value={stats.mitreFindings}
+
           />
           </div>
         </div>
@@ -336,7 +375,7 @@ const Dashboard = () => {
             ))}
           </div>
         )}
-        
+
         {historyResponse && historyResponse.pages > 1 && (
           <Pagination
             currentPage={currentPage}
@@ -353,4 +392,3 @@ const Dashboard = () => {
 }
 
 export default Dashboard;
-

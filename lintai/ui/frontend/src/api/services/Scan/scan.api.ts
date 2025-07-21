@@ -1,9 +1,9 @@
 import api from "../../Api"
-import { 
-  ScanJobResult, 
-  InventoryJobResult, 
-  LastScanResult, 
-  ScanType, 
+import {
+  ScanJobResult,
+  InventoryJobResult,
+  LastScanResult,
+  ScanType,
   JobResult,
   ScanReport,
   InventoryReport
@@ -101,19 +101,13 @@ class Scan {
         return response.data;
     }
 
-    async getInventoryHistory(params?: {
-        page?: number;
-        limit?: number;
-        search?: string;
-    }): Promise<{
-        items: any[];
-        total: number;
-        page: number;
-        limit: number;
-        pages: number;
-    }> {
-        const response = await api.get('/api/history/inventory', { params });
+    async getInventoryHistory() {
+        const response = await api.get('/api/history/inventory');
         return response.data;
+    }
+
+    async clearHistory(): Promise<void> {
+        await api.delete('/api/history/clear');
     }
 
     async stopScan(runId: string) {
