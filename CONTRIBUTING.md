@@ -35,10 +35,47 @@ pre-commit install
 pytest
 ```
 
-1. Try a scan:
+1. Try finding issues:
 
 ```bash
-lintai scan examples/
+# Single directory
+lintai find-issues examples/
+
+# Test multi-file analysis
+lintai find-issues examples/main.py examples/chatbot.py -l DEBUG
+
+# Generate call graph
+lintai catalog-ai examples/ --graph
+```
+
+---
+
+## 🧪 Testing cross-file analysis
+
+When working on multi-file analysis features:
+
+1. **Test with multiple files**:
+
+```bash
+# Verify cross-file call tracking works
+lintai find-issues examples/main.py examples/chatbot.py -l DEBUG
+
+# Check that caller context appears in LLM prompts
+grep -A 5 "CALL-FLOW CONTEXT" <debug-output>
+```
+
+1. **Validate call graph export**:
+
+```bash
+# Generate graph and inspect edges
+lintai catalog-ai examples/ --graph -o test.json
+jq '.graph.edges[] | select(.data.source | contains("main"))' test.json
+```
+
+1. **Test mixed file/directory arguments**:
+
+```bash
+lintai find-issues examples/main.py examples/agents/ --output mixed-test.json
 ```
 
 ---

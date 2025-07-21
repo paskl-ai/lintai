@@ -1,21 +1,23 @@
-import { stat } from 'fs'
-
 import { createSlice } from '@reduxjs/toolkit'
 import type { Draft, PayloadAction } from '@reduxjs/toolkit'
-
+import { JobStatus, AnalysisType } from '../../../api/services/types'
 
 interface IInitialState {
-
   isProcessing: boolean
-  jobStatus: string
+  jobStatus: JobStatus
   jobId?: string
+  jobType?: AnalysisType
+  progress?: number
+  error?: string
 }
 
 const initialState: IInitialState = {
-
   isProcessing: false,
-  jobStatus: '',
+  jobStatus: 'pending',
   jobId: undefined,
+  jobType: undefined,
+  progress: undefined,
+  error: undefined,
 }
 
 export const serverStatusSlice = createSlice({
@@ -28,34 +30,47 @@ export const serverStatusSlice = createSlice({
       state: Draft<IInitialState>,
       action: PayloadAction<{
         jobId: string
-        jobStatus: string
-        // selectedServer: VirtualMachine
+        jobStatus?: JobStatus
+        jobType?: AnalysisType
+        progress?: number
       }>,
     ) => {
       state.jobId = action.payload.jobId
-      state.jobStatus = action.payload.jobStatus
+      state.jobStatus = action.payload.jobStatus || 'starting'
+      state.jobType = action.payload.jobType
+      state.progress = action.payload.progress
       state.isProcessing = true
-      // // state.selectedServer = action.payload.selectedServer
+      state.error = undefined
     },
-    // Update the job status; if the status reaches 'started', disable processing
+    // Update the job status; if the status reaches 'completed', 'failed', or 'stopped', disable processing
     updateJobStatus: (
       state: Draft<IInitialState>,
-      action: PayloadAction<string>,
+      action: PayloadAction<{
+        status: JobStatus
+        progress?: number
+        error?: string
+      }>,
     ) => {
-      state.jobStatus = action.payload
+      state.jobStatus = action.payload.status
+      state.progress = action.payload.progress
+      state.error = action.payload.error
+
       if (
-        action.payload.toLocaleLowerCase() === 'started' ||
-        action.payload.toLocaleLowerCase() === 'stopped'
+        action.payload.status === 'completed' ||
+        action.payload.status === 'failed' ||
+        action.payload.status === 'stopped'
       ) {
         state.isProcessing = false
       }
     },
     // Reset the job details (optional: use on errors or once finished)
     resetJob: (state: Draft<IInitialState>) => {
-      state.jobStatus = ''
+      state.jobStatus = 'pending'
       state.jobId = undefined
+      state.jobType = undefined
+      state.progress = undefined
+      state.error = undefined
       state.isProcessing = false
-      // // state.selectedServer = initialState.selectedServer
     },
   },
 })

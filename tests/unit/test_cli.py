@@ -21,7 +21,7 @@ def test_cli_runs(tmp_path, monkeypatch):
         sys.executable,
         "-m",
         "lintai.cli",
-        "scan",
+        "find-issues",
         str(tmp_path),
         "--output",
         str(output_file),
@@ -54,7 +54,7 @@ def main():
     src.write_text(code)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["ai-inventory", str(src)])
+    result = runner.invoke(app, ["catalog-ai", str(src)])
 
     assert result.exit_code == 0
     inventory_data = json.loads(result.stdout)

@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------
- *  Scan.page.tsx
- *  Completely refactored to use the <Table /> component (shared with
- *  server‑list) instead of the old “Sonar” accordion layout.
+ *  Findings.page.tsx
+ *  Completely refactored to use the <Table /> component (shared with
+ *  server‑list) instead of the old "Sonar" accordion layout.
  * ------------------------------------------------------------------- */
 
 import React, { useEffect, useMemo, useState } from 'react'
@@ -12,22 +12,23 @@ import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router'
 
 import {
-  scanInventoryDTO,
-  ScanService,
-  startScanDTO,
-} from '../../api/services/Scan/scan.api'
+  catalogAiDTO,
+  AnalysisService,
+  findIssuesDTO,
+} from '../../api/services/Scan/analysis.api'
 import CommonButton from '../../components/buttons/CommonButton'
 import ConfigurationInfo from '../../components/configurationInfo/ConfigurationInfo'
 import FileSystemPage from '../filesystem/filesystem.page'
 import Table from '../../components/table/Table'
+import Pagination from '../../components/pagination/Pagination'
 
 import { QueryKey } from '../../api/QueryKey'
 import {
-  resetJob,
   startJob,
 } from '../../redux/services/ServerStatus/server.status.slice'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { StatCard } from '../../components/stateCard/StateCard'
+import { useJobManager } from '../../hooks/useJobManager'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -37,7 +38,6 @@ const FiFolder = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" w
 const FiFileText = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
 const FiChevronDown = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const FiChevronRight = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
-const FiAlertTriangle = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
 const FiShield = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>;
 const FiSearch = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const FiEye = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
@@ -181,58 +181,55 @@ const FindingRow = ({
 
 
 
-const Scan = () => {
+const Findings = () => {
   const dispatch = useAppDispatch()
   const [severityFilter, setSeverityFilter] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isFileSystemModalOpen, setIsFileSystemModalOpen] = useState(false)
-  const { jobId: runId, isProcessing } = useAppSelector(
-    (state) => state.serverStatus,
-  )
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
   const configValues = useAppSelector((state) => state.config)
 
+  // Use job manager for consistent job tracking (but don't fetch last results)
+  const { isProcessing } = useJobManager({
+    jobType: 'find_issues',
+    enableLastResultFetch: false,
+    onJobComplete: (result, resultPath) => {
+      // Additional actions when job completes
+      console.log('Security analysis completed, result path:', resultPath);
+    },
+    onJobError: (error) => {
+      toast.error(error.message || 'Failed to complete security analysis.');
+    }
+  });
+
+  // Fetch scan history with pagination
+  const { data: scanHistoryResponse, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['scan-history', currentPage, itemsPerPage, searchQuery],
+    queryFn: () => AnalysisService.getFindingsHistory({
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchQuery || undefined
+    }),
+    initialData: { items: [], total: 0, page: 1, limit: itemsPerPage, pages: 0 },
+  });
+
+  const scanHistory = scanHistoryResponse?.items || [];
+
+
+
   const { mutate: startScanMutation, isPending: isStartingScan } = useMutation({
-    mutationFn: (body) => ScanService.startScan(body),
+    mutationFn: (body) => AnalysisService.findIssues(body),
     onSuccess: (res) => {
-      toast.loading(`Scanning...`)
+      toast.loading(`Analyzing security...`)
       if (res?.run_id) {
-        dispatch(startJob({ jobId: res.run_id, jobStatus: 'Starting' }))
-      } else {
-        dispatch(resetJob())
+        dispatch(startJob({ jobId: res.run_id, jobStatus: 'starting', jobType: 'find_issues' }))
       }
     },
     onError: (error) => {
-      toast.error(error.message || 'Failed to start scan.')
-      dispatch(resetJob());
+      toast.error(error.message || 'Failed to start security analysis.')
     },
   })
-
-  const { data: scanResult, isFetching: isFetchingScan } = useQuery({
-    queryKey: [QueryKey.JOB, runId],
-    queryFn: async() => {
-      if (!runId) return null;
-      const res=await ScanService.getResults(runId);
-      if (res?.report||res?.findings) {
-        toast.dismiss();
-        toast.success("Scan complete!");
-        dispatch(resetJob());
-    }
-      return res?.report||res?.findings
-    },
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3000 : false,
-    enabled: !!runId && isProcessing,
-
-  })
-
-  const { data: lastScanResult, isLoading: isLoadingLastScan } = useQuery({
-    queryKey: [QueryKey.JOB + 'last-scan'],
-    queryFn: () => ScanService.getLastResultsByType('scan'),
-    enabled: !isProcessing,
-  })
-
-  const report = isProcessing ? scanResult?.report : lastScanResult?.report
-  const findings: Finding[] = report?.findings || []
 
   const handleFolderSelection = (path: string) => {
     startScanMutation({ path })
@@ -240,7 +237,30 @@ const Scan = () => {
   }
 
   const groupedAndFilteredData = useMemo(() => {
-    const filteredFindings = findings.filter((f) => {
+    // Use scan history instead of current state
+    const historyData = scanHistory || [];
+    const allFindings = [];
+
+    // Collect all findings from all scan runs
+    historyData.forEach(historyEntry => {
+      if (historyEntry?.findings_by_file) {
+        Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
+          if (findings && Array.isArray(findings)) {
+            findings.forEach(finding => {
+              allFindings.push({
+                ...finding,
+                location: filePath,
+                date: historyEntry.timestamp,
+                run_id: historyEntry.run_id,
+                status: historyEntry.status
+              });
+            });
+          }
+        });
+      }
+    });
+
+    const filteredFindings = allFindings.filter((f) => {
       const sevMatch = severityFilter.length === 0 || severityFilter.includes(f.severity)
       const searchMatch =
         searchQuery === '' ||
@@ -259,14 +279,14 @@ const Scan = () => {
     }, {} as Record<string, Finding[]>);
 
     const root: GroupedFinding = { type: 'folder', name: 'root', path: '/', children: [] };
-    
+
     Object.entries(filesMap).forEach(([fullPath, findingsInFile]) => {
         const parts = fullPath.split('/');
         let currentNode = root;
 
         parts.forEach((part, index) => {
             const currentPath = parts.slice(0, index + 1).join('/');
-            if (index === parts.length - 1) { 
+            if (index === parts.length - 1) {
                  if (!currentNode.children) currentNode.children = [];
                 currentNode.children.push({
                     type: 'file',
@@ -274,7 +294,7 @@ const Scan = () => {
                     path: fullPath,
                     findings: findingsInFile,
                 });
-            } else { 
+            } else {
                 if (!currentNode.children) currentNode.children = [];
                 let childNode = currentNode.children.find(child => child.path === currentPath);
                 if (!childNode) {
@@ -292,24 +312,58 @@ const Scan = () => {
     });
 
     return root.children || [];
-  }, [findings, severityFilter, searchQuery]);
+  }, [scanHistory, severityFilter, searchQuery]);
 
 
   const severityCounts = useMemo(() => {
-    return findings.reduce((acc, f) => {
+    const historyData = scanHistory || [];
+    const allFindings = [];
+
+    // Get all findings from scan history
+    historyData.forEach(historyEntry => {
+      if (historyEntry?.findings_by_file) {
+        Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
+          if (findings && Array.isArray(findings)) {
+            findings.forEach(finding => {
+              allFindings.push(finding);
+            });
+          }
+        });
+      }
+    });
+
+    return allFindings.reduce((acc, f) => {
       acc[f.severity] = (acc[f.severity] || 0) + 1
       return acc
     }, {} as Record<string, number>)
-  }, [findings])
+  }, [scanHistory])
 
-  const isLoading = isStartingScan || isProcessing || (isLoadingLastScan && !runId);
+  const totalFindings = useMemo(() => {
+    const historyData = scanHistory || [];
+    let count = 0;
+
+    historyData.forEach(historyEntry => {
+      if (historyEntry?.findings_by_file) {
+        Object.entries(historyEntry.findings_by_file).forEach(([filePath, findings]) => {
+          if (findings && Array.isArray(findings)) {
+            count += findings.length;
+          }
+        });
+      }
+    });
+
+    return count;
+  }, [scanHistory]);
+  console.log('Scan history:', scanHistory,groupedAndFilteredData)
+
+  const isLoadingData = isStartingScan || isLoadingHistory;
 
   return (
     <div className="flex sm:ml-50 bg-gray-50 min-h-screen">
       <main className="flex-1 p-6">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Scan Results</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Security Findings</h1>
             <p className="text-gray-600 mt-1">Review security findings and vulnerabilities in your codebase.</p>
           </div>
           <div className="flex items-center gap-2">
@@ -321,7 +375,7 @@ const Scan = () => {
               disabled={isStartingScan || isProcessing}
             >
               <FiSearch className="mr-2" />
-              <span>Scan for Findings</span>
+              <span>Find Security Issues</span>
             </CommonButton>
           </div>
         </header>
@@ -341,21 +395,18 @@ const Scan = () => {
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
             label="Total Findings"
-            value={findings.length}
-            icon={<FiAlertTriangle size={24} />}
-            color="text-red-500"
+            value={totalFindings}
+            mainStyle
           />
           {['critical', 'blocker', 'high', 'medium', 'low'].filter(sev => severityCounts[sev] > 0).map((sev) => (
              <StatCard
                 key={sev}
                 label={sev}
                 value={severityCounts[sev] || 0}
-                icon={<FiShield size={24} />}
-                color="text-gray-500"
             />
           ))}
         </div>
-        
+
         <div className="bg-white rounded-lg border border-gray-200">
              <div className="p-4 flex items-center justify-between border-b border-gray-200">
                 <div className="relative w-full max-w-sm">
@@ -390,15 +441,15 @@ const Scan = () => {
                     ))}
                 </div>
              </div>
-        
-            {isLoading ? (
+
+            {isLoadingData ? (
                 <FindingsSkeleton />
             ) : groupedAndFilteredData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center text-gray-500">
                     <FiShield size={48} className="mb-4 text-gray-400" />
                     <p className="text-lg font-semibold">No Findings Here</p>
                     <p className="mt-1 text-sm">
-                    {findings.length > 0 ? "No results match your current filters." : "Run a new scan to find vulnerabilities."}
+                    {totalFindings > 0 ? "No results match your current filters." : "Run a new scan to find vulnerabilities."}
                     </p>
                 </div>
             ) : (
@@ -409,6 +460,17 @@ const Scan = () => {
                 </div>
             )}
         </div>
+
+        {scanHistoryResponse && scanHistoryResponse.pages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={scanHistoryResponse.pages}
+            onPageChange={setCurrentPage}
+            totalItems={scanHistoryResponse.total}
+            itemsPerPage={itemsPerPage}
+            className="mt-4"
+          />
+        )}
       </main>
     </div>
   )
@@ -417,4 +479,4 @@ const Scan = () => {
 
 
 
-export default Scan
+export default Findings

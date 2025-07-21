@@ -6,12 +6,12 @@ Endpoints
 *  GET /POST  /api/config      – UI defaults (path, depth, log-level …)
 *  GET /POST  /api/env         – non-secret .env knobs (budgets, provider …)
 *  POST       /api/secrets     – write-only API keys
-*  POST       /api/scan        – run detectors in background
-*  POST       /api/inventory   – run ai-inventory in background
+*  POST       /api/find-issues – run detectors in background
+*  POST       /api/catalog-ai  – run catalog-ai in background
 *  GET        /api/runs        – history
 *  GET        /api/results/{id}[ /filter ]   – reports & helpers
 *  GET        /api/last-result – fetch the most recent run result
-*  GET        /api/history     – fetch the history of all scan runs
+*  GET        /api/history     – fetch the history of all analysis runs
 """
 
 from __future__ import annotations
@@ -57,10 +57,17 @@ ROOT = Path(os.getenv("LINTAI_SRC_CODE_ROOT", Path.cwd()))
 if not ROOT.is_dir():
     raise RuntimeError(f"Workspace root {ROOT} does not exist or is not a directory")
 # ────────────────── persistent workspace ────────────────────
-DATA_DIR = Path(tempfile.gettempdir()) / "lintai-ui"
-DATA_DIR.mkdir(exist_ok=True)
+# Use persistent directory in user's home instead of temp to survive reboots
+DATA_DIR = Path.home() / ".lintai" / "ui"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 RUNS_FILE = DATA_DIR / "runs.json"
+FINDINGS_HISTORY_FILE = (
+    DATA_DIR / "findings_history.json"
+)  # Enhanced findings history with file details
+CATALOG_HISTORY_FILE = (
+    DATA_DIR / "catalog_history.json"
+)  # Enhanced catalog history with file details
 CONFIG_JSON = DATA_DIR / "config.json"  # *UI* prefs (depth, log-level …)
 CFG_ENV = DATA_DIR / "config.env"  # non-secret
 SECR_ENV = DATA_DIR / "secrets.env"  # API keys (0600)
@@ -78,8 +85,8 @@ class ConfigModel(BaseModel):
 
 
 class RunType(str, Enum):
-    scan = "scan"
-    inventory = "inventory"
+    find_issues = "find_issues"
+    catalog_ai = "catalog_ai"
 
 
 class RunSummary(BaseModel):
@@ -201,11 +208,19 @@ def _env_cli_flags(extra_env: str | None = None) -> list[str]:
     if pref.env_file:
         return ["-e", pref.env_file]
 
-    # 3. Fall back to server's internal config files
+    # 3. Use server's internal config files - need to merge secrets and config
+    env_files = []
+
+    # Always include secrets if it exists (API keys)
     if SECR_ENV.exists():
-        return ["-e", str(SECR_ENV)]
+        env_files.extend(["-e", str(SECR_ENV)])
+
+    # Also include config environment if it exists (other settings)
     if CFG_ENV.exists():
-        return ["-e", str(CFG_ENV)]
+        env_files.extend(["-e", str(CFG_ENV)])
+
+    if env_files:
+        return env_files
 
     # 4. No env file specified - CLI will auto-load .env from working directory
     return []
@@ -225,23 +240,88 @@ def _common_flags(depth: int | None, log_level: str | None):
 def _kick(cmd: list[str], rid: str, bg: BackgroundTasks):
     def task():
         try:
-            subprocess.run(cmd, check=True)
-            _set_status(rid, "done")
-        except subprocess.CalledProcessError as exc:
-            log.error("lintai failed: %s", exc)
+            # Run the command and capture the exit code
+            result = subprocess.run(cmd, check=False)
+
+            # Exit codes 0 and 1 are both considered successful for lintai:
+            # - 0: scan completed with no blocking findings
+            # - 1: scan completed with blocking findings (still a successful scan)
+            # Only exit codes > 1 indicate actual errors
+            if result.returncode <= 1:
+                _set_status(rid, "done")
+
+                # Add to enhanced history when job completes successfully
+                run = next((r for r in _runs() if r.run_id == rid), None)
+                if run:
+                    report_path = _report_path(rid, run.type)
+                    report = None
+                    if report_path.exists():
+                        try:
+                            report = json.loads(report_path.read_text())
+                        except Exception:
+                            pass
+
+                    if run.type == RunType.find_issues:
+                        _add_findings_history_entry(run, report)
+                    elif run.type == RunType.catalog_ai:
+                        _add_catalog_history_entry(run, report)
+            else:
+                # Only treat exit codes > 1 as actual errors
+                log.error("lintai failed with exit code %d", result.returncode)
+                _set_status(rid, "error")
+
+                # Store error message for failed analyses
+                run = next((r for r in _runs() if r.run_id == rid), None)
+                if run:
+                    error_report = {
+                        "error": True,
+                        "error_message": f"Command failed with exit code {result.returncode}",
+                        "errors": [
+                            f"Command failed with exit code {result.returncode}"
+                        ],
+                    }
+                    error_path = _report_path(rid, run.type)
+                    error_path.write_text(json.dumps(error_report))
+
+                    # Add to history with error info
+                    if run.type == RunType.find_issues:
+                        _add_findings_history_entry(run, error_report)
+                    elif run.type == RunType.catalog_ai:
+                        _add_catalog_history_entry(run, error_report)
+
+        except Exception as exc:
+            # Handle any other exceptions (e.g., file not found, permission errors)
+            log.error("lintai execution failed: %s", exc)
             _set_status(rid, "error")
+
+            # Store error message for failed analyses
+            run = next((r for r in _runs() if r.run_id == rid), None)
+            if run:
+                error_report = {
+                    "error": True,
+                    "error_message": str(exc),
+                    "errors": [str(exc)],
+                }
+                error_path = _report_path(rid, run.type)
+                error_path.write_text(json.dumps(error_report))
+
+                # Add to history with error info
+                if run.type == RunType.find_issues:
+                    _add_findings_history_entry(run, error_report)
+                elif run.type == RunType.catalog_ai:
+                    _add_catalog_history_entry(run, error_report)
 
     bg.add_task(task)
 
 
 def _report_path(rid: str, kind: RunType) -> Path:
-    # Always use a subdirectory for both scan and inventory
+    # Always use a subdirectory for both find_issues and catalog_ai
     subdir = DATA_DIR / rid
     subdir.mkdir(parents=True, exist_ok=True)
-    if kind is RunType.scan:
-        return subdir / "scan_report.json"
+    if kind is RunType.find_issues:
+        return subdir / "findings_report.json"
     else:
-        return subdir / "inventory.json"
+        return subdir / "catalog.json"
 
 
 # ╭──────────────────────── FastAPI app ─────────────────────╮
@@ -323,6 +403,81 @@ def secrets_set(payload: SecretPayload = Body(...)):
     _write_env(SECR_ENV, payload.model_dump(exclude_none=True))
 
 
+@app.get("/api/secrets/status")
+def secrets_status():
+    """Return which API keys are configured (without revealing the actual keys)"""
+    if not SECR_ENV.exists():
+        return {}
+
+    try:
+        with open(SECR_ENV, "r") as f:
+            lines = f.readlines()
+
+        configured_keys = {}
+        for line in lines:
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                key = line.split("=")[0].strip()
+                # Return True if the key exists and has a non-empty value
+                value = line.split("=", 1)[1].strip()
+                configured_keys[key] = bool(value)
+
+        return configured_keys
+    except Exception:
+        return {}
+
+
+# ─────────── clear all history ─────
+@app.delete("/api/history/clear", status_code=204)
+def clear_all_history():
+    """
+    Clear all findings/inventory history and results while preserving user config and secrets.
+    This removes:
+    - runs.json (run history)
+    - findings_history.json (findings history)
+    - catalog_history.json (catalog history)
+    - file_index.json (file index)
+    - All individual result directories (UUID folders)
+
+    Preserves:
+    - config.env (user configuration)
+    - secrets.env (API keys)
+    """
+    import shutil
+
+    try:
+        # Remove history files
+        for file_path in [RUNS_FILE, FINDINGS_HISTORY_FILE, CATALOG_HISTORY_FILE]:
+            if file_path.exists():
+                file_path.unlink()
+                log.info(f"Removed {file_path}")
+
+        # Remove file index if it exists
+        file_index_path = DATA_DIR / "file_index.json"
+        if file_index_path.exists():
+            file_index_path.unlink()
+            log.info(f"Removed {file_index_path}")
+
+        # Remove all UUID result directories
+        for item in DATA_DIR.iterdir():
+            if item.is_dir() and len(item.name) == 36:  # UUID length check
+                try:
+                    # Validate it's actually a UUID format
+                    uuid.UUID(item.name)
+                    shutil.rmtree(item)
+                    log.info(f"Removed result directory {item}")
+                except (ValueError, OSError) as e:
+                    log.warning(f"Failed to remove directory {item}: {e}")
+
+        log.info("Successfully cleared all history and results")
+
+    except Exception as e:
+        log.error(f"Error clearing history: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to clear history: {str(e)}"
+        )
+
+
 # ─────────── /runs ─────────────
 @app.get("/api/runs", response_model=list[RunSummary])
 def runs():
@@ -350,7 +505,7 @@ def last_result():
 @app.get("/api/last-result/{run_type}")
 def last_result_by_type(run_type: str):
     """
-    Fetch the most recent run result of a specific type (scan or inventory)
+    Fetch the most recent run result of a specific type (find_issues or catalog_ai)
     along with its report if available.
     """
     runs = _runs()
@@ -374,8 +529,8 @@ def last_result_by_type(run_type: str):
 @app.get("/api/history")
 def history():
     """
-    Fetch the history of all scan runs along with their stored reports if available.
-    Includes type of scans, date of scans, and files scanned.
+    Fetch the history of all analysis runs along with their stored reports if available.
+    Includes type of analysis, date of analysis, and files analyzed.
     """
     runs = _runs()
     if not runs:
@@ -386,16 +541,18 @@ def history():
         report_path = _report_path(run.run_id, run.type)
         report = None
         errors = None
-        scanned_path = None
+        analyzed_path = None
         if report_path.exists():
             report = json.loads(report_path.read_text())
             errors = report.get("errors", None)
-            scanned_path = report.get("scanned_path")
+            analyzed_path = report.get("analyzed_path") or report.get(
+                "scanned_path"
+            )  # backwards compatibility
         history.append(
             {
                 "type": run.type,
                 "date": run.created.isoformat(),
-                "scanned_path": scanned_path,
+                "analyzed_path": analyzed_path,
                 "errors": errors,
                 "run": run,
                 "report": report,
@@ -404,9 +561,169 @@ def history():
     return history
 
 
-# ─────────── /scan ─────────────
-@app.post("/api/scan", response_model=RunSummary)
-async def scan(
+# ─────────── /history/findings ──────────
+@app.get("/api/history/findings")
+def findings_history(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search query for filtering"),
+):
+    """
+    Fetch the history of all findings runs as a list of items (similar to /api/history but findings-only).
+    """
+    runs = _runs()
+    if not runs:
+        return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 0}
+
+    findings_history = []
+    for run in runs:
+        # Only include findings type runs
+        if run.type != RunType.find_issues:
+            continue
+
+        report_path = _report_path(run.run_id, run.type)
+        report = None
+        errors = None
+        analyzed_path = None
+        findings_by_file = {}
+
+        if report_path.exists():
+            report = json.loads(report_path.read_text())
+            errors = report.get("errors", None)
+            analyzed_path = report.get("analyzed_path") or report.get(
+                "scanned_path"
+            )  # backwards compatibility
+
+            # Group findings by file for easy access
+            if "findings" in report:
+                for finding in report["findings"]:
+                    file_path = finding.get("location", "unknown")
+                    if file_path not in findings_by_file:
+                        findings_by_file[file_path] = []
+                    findings_by_file[file_path].append(finding)
+
+        # Only include findings that have actual findings
+        if not findings_by_file:
+            continue
+
+        # Get error message for failed findings runs
+        error_message = None
+        if run.status == "error" and report:
+            error_message = report.get("error_message", "Unknown error occurred")
+
+        findings_history.append(
+            {
+                "run_id": run.run_id,
+                "type": run.type,
+                "timestamp": run.created.isoformat(),
+                "analyzed_path": analyzed_path or run.path,
+                "status": run.status,
+                "errors": errors,
+                "error_message": error_message,
+                "findings_by_file": findings_by_file,
+                "total_findings": len(report.get("findings", [])) if report else 0,
+                "run": run.model_dump(),
+                "report": report,
+            }
+        )
+
+    # Sort by timestamp, most recent first
+    findings_history.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    # Apply search filter if provided
+    if search:
+        search_lower = search.lower()
+        findings_history = [
+            entry
+            for entry in findings_history
+            if (
+                search_lower in entry["analyzed_path"].lower()
+                or search_lower in entry["run_id"].lower()
+                or any(
+                    search_lower in file_path.lower()
+                    for file_path in entry["findings_by_file"].keys()
+                )
+            )
+        ]
+
+    total = len(findings_history)
+    pages = (total + limit - 1) // limit
+
+    # Apply pagination
+    start = (page - 1) * limit
+    end = start + limit
+    items = findings_history[start:end]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
+
+# ─────────── /history/inventory ──────────
+@app.get("/api/history/catalog")
+def catalog_history(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search query for filtering"),
+):
+    """
+    Fetch the history of all inventory runs with file-level breakdown.
+    """
+    history = _load_catalog_history()
+
+    if not history:
+        return {"items": [], "total": 0, "page": page, "limit": limit, "pages": 0}
+
+    # Apply search filter if provided
+    if search:
+        search_lower = search.lower()
+        filtered_history = []
+        for entry in history:
+            # Check if search matches any field in the entry
+            matches = (
+                search_lower in entry.get("analyzed_path", "").lower()
+                or search_lower in entry.get("run_id", "").lower()
+            )
+
+            # Also check inventory_by_file for matches
+            if not matches and "inventory_by_file" in entry:
+                for file_record in entry["inventory_by_file"]:
+                    if search_lower in file_record.get("file_path", "").lower() or any(
+                        search_lower in framework.lower()
+                        for framework in file_record.get("frameworks", [])
+                    ):
+                        matches = True
+                        break
+
+            if matches:
+                filtered_history.append(entry)
+
+        history = filtered_history
+
+    total = len(history)
+    pages = (total + limit - 1) // limit
+
+    # Apply pagination
+    start = (page - 1) * limit
+    end = start + limit
+    items = history[start:end]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
+
+# ─────────── /find-issues ─────────────
+@app.post("/api/find-issues", response_model=RunSummary)
+async def find_issues(
     bg: BackgroundTasks,
     files: list[UploadFile] = File(default=[]),
     path: str | None = Query(None),  # Allow path to be passed as a query parameter
@@ -429,9 +746,9 @@ async def scan(
     reported_path = path or "." if files else target
 
     # 4) build the CLI command & kick it off in background
-    out = _report_path(rid, RunType.scan)
+    out = _report_path(rid, RunType.find_issues)
     cmd = (
-        ["lintai", "scan", target, "--output", str(out)]
+        ["lintai", "find-issues", target, "--output", str(out)]
         + _common_flags(depth, log_level)
         + _env_cli_flags()
     )
@@ -440,7 +757,7 @@ async def scan(
     # 5) record & return the pending run
     run = RunSummary(
         run_id=rid,
-        type=RunType.scan,
+        type=RunType.find_issues,
         created=datetime.now(timezone.utc),
         status="pending",
         path=reported_path,
@@ -450,20 +767,20 @@ async def scan(
 
 
 # ─────────── /inventory ────────
-@app.post("/api/inventory", response_model=RunSummary)
-def inventory(
+@app.post("/api/catalog-ai", response_model=RunSummary)
+def catalog_ai(
     bg: BackgroundTasks,
     path: str | None = None,
     depth: int | None = None,
     log_level: str | None = None,
 ):
     rid = str(uuid.uuid4())
-    out = _report_path(rid, RunType.inventory)
+    out = _report_path(rid, RunType.catalog_ai)
 
     cmd = (
         [
             "lintai",
-            "ai-inventory",
+            "catalog-ai",
             path or _load_cfg().source_path,
             "--graph",  # always ask for graph for the UI
             "--output",
@@ -476,7 +793,7 @@ def inventory(
 
     run = RunSummary(
         run_id=rid,
-        type=RunType.inventory,
+        type=RunType.catalog_ai,
         created=datetime.now(timezone.utc),  # Use timezone.utc instead of UTC
         status="pending",
         path=path or _load_cfg().source_path,
@@ -502,7 +819,7 @@ def results(rid: str):
     data = json.loads(fp.read_text())
     logging.debug(f"Processing finding location data: {data}")  # Debug log
 
-    if run.type is RunType.scan:
+    if run.type is RunType.find_issues:
         findings = data.get("findings")
         if findings is None:
             raise HTTPException(500, "scan report missing 'findings'")
@@ -520,6 +837,10 @@ def results(rid: str):
             except Exception:
                 # if something doesn’t match, leave it unchanged
                 pass
+    else:
+        # For catalog reports, ensure the type field is set
+        if "type" not in data:
+            data["type"] = "catalog"
 
     return data
 
@@ -535,8 +856,8 @@ def filter_scan(
     data = results(rid)
     if data.get("status") == "pending":
         return data
-    if data["type"] != "scan":
-        raise HTTPException(400, "not a scan run")
+    if data["type"] != "find_issues":
+        raise HTTPException(400, "not a findings run")
 
     findings = data.get("findings", [])
     if severity:
@@ -551,13 +872,13 @@ def filter_scan(
 
 
 # ---- inventory sub-graph helper
-@app.get("/api/inventory/{rid}/subgraph")
+@app.get("/api/catalog/{rid}/subgraph")
 def subgraph(rid: str, node: str, depth: int = Query(1, ge=1, le=5)):
     data = results(rid)
     if data.get("status") == "pending":
         return data
-    if data["type"] != "inventory":
-        raise HTTPException(400, "not an inventory run")
+    if data["type"] != "catalog":
+        raise HTTPException(400, "not a catalog run")
 
     nodes, edges = data["data"]["nodes"], data["data"]["edges"]
     frontier = {node}
@@ -605,3 +926,169 @@ if frontend.exists():
 
 else:
     log.warning("UI disabled – React build not found at %s", frontend)
+
+
+# Enhanced history helper functions
+def _load_scan_history() -> list[dict]:
+    return _json_load(FINDINGS_HISTORY_FILE, [])
+
+
+def _add_findings_history_entry(run: RunSummary, report: dict):
+    """Add a scan entry with file-level breakdown and update existing files"""
+    history = _load_scan_history()
+
+    # Extract file-level findings
+    findings_by_file = {}
+    scanned_files = set()
+
+    if report and "findings" in report:
+        for finding in report["findings"]:
+            file_path = finding.get("location", "unknown")
+            scanned_files.add(file_path)
+            if file_path not in findings_by_file:
+                findings_by_file[file_path] = []
+            findings_by_file[file_path].append(finding)
+
+    # Remove older entries for files that are being rescanned
+    updated_history = []
+    for existing_entry in history:
+        # Check if this entry contains any files that are being rescanned
+        existing_files = set(existing_entry.get("findings_by_file", {}).keys())
+
+        # If there's no overlap with scanned files, keep the entry
+        # If there's overlap, we need to remove the overlapping files from this entry
+        if not scanned_files.intersection(existing_files):
+            updated_history.append(existing_entry)
+        else:
+            # Remove overlapping files from this entry
+            filtered_findings = {
+                file_path: findings
+                for file_path, findings in existing_entry.get(
+                    "findings_by_file", {}
+                ).items()
+                if file_path not in scanned_files
+            }
+
+            # Only keep the entry if it still has files after filtering
+            if filtered_findings:
+                existing_entry["findings_by_file"] = filtered_findings
+                existing_entry["total_findings"] = sum(
+                    len(findings) for findings in filtered_findings.values()
+                )
+                updated_history.append(existing_entry)
+
+    # Create new entry with the latest scan results
+    new_entry = {
+        "run_id": run.run_id,
+        "timestamp": run.created.isoformat(),
+        "path": run.path,
+        "status": run.status,
+        "total_findings": len(report.get("findings", [])) if report else 0,
+        "findings_by_file": findings_by_file,
+        "report_summary": {
+            "analyzed_path": (
+                report.get("analyzed_path") or report.get("scanned_path")
+                if report
+                else None
+            ),
+            "llm_usage": report.get("llm_usage") if report else None,
+            "errors": report.get("errors") if report else None,
+        },
+    }
+
+    # Add the new entry at the end (most recent position)
+    updated_history.append(new_entry)
+
+    # Keep only last 100 entries
+    if len(updated_history) > 100:
+        updated_history = updated_history[-100:]
+
+    _json_dump(FINDINGS_HISTORY_FILE, updated_history)
+
+
+def _load_catalog_history() -> list[dict]:
+    return _json_load(CATALOG_HISTORY_FILE, [])
+
+
+def _add_catalog_history_entry(run: RunSummary, report: dict):
+    """Add an inventory entry with file-level breakdown and update existing files"""
+    history = _load_catalog_history()
+
+    # Extract file-level inventory
+    inventory_by_file = report.get("inventory_by_file", []) if report else []
+
+    # Track which files are being updated in this scan
+    scanned_files = set(file_inv.get("file_path") for file_inv in inventory_by_file)
+
+    # Remove older entries for files that are being rescanned
+    updated_history = []
+    for existing_entry in history:
+        # Check if this entry contains any files that are being rescanned
+        existing_files = set(
+            file_inv.get("file_path")
+            for file_inv in existing_entry.get("inventory_by_file", [])
+        )
+
+        # If there's no overlap with scanned files, keep the entry
+        # If there's overlap, we need to remove the overlapping files from this entry
+        if not scanned_files.intersection(existing_files):
+            updated_history.append(existing_entry)
+        else:
+            # Remove overlapping files from this entry
+            filtered_inventory = [
+                file_inv
+                for file_inv in existing_entry.get("inventory_by_file", [])
+                if file_inv.get("file_path") not in scanned_files
+            ]
+
+            # Only keep the entry if it still has files after filtering
+            if filtered_inventory:
+                existing_entry["inventory_by_file"] = filtered_inventory
+                existing_entry["total_files"] = len(filtered_inventory)
+                existing_entry["total_components"] = sum(
+                    len(file_inv.get("components", []))
+                    for file_inv in filtered_inventory
+                )
+                existing_entry["frameworks_found"] = list(
+                    set(
+                        framework
+                        for file_inv in filtered_inventory
+                        for framework in file_inv.get("frameworks", [])
+                    )
+                )
+                updated_history.append(existing_entry)
+
+    # Create new entry with the latest scan results
+    new_entry = {
+        "run_id": run.run_id,
+        "timestamp": run.created.isoformat(),
+        "path": run.path,
+        "status": run.status,
+        "total_files": len(inventory_by_file),
+        "inventory_by_file": inventory_by_file,
+        "frameworks_found": (
+            list(
+                set(
+                    framework
+                    for file_inv in inventory_by_file
+                    for framework in file_inv.get("frameworks", [])
+                )
+            )
+            if inventory_by_file
+            else []
+        ),
+        "total_components": (
+            sum(len(file_inv.get("components", [])) for file_inv in inventory_by_file)
+            if inventory_by_file
+            else 0
+        ),
+    }
+
+    # Add the new entry at the end (most recent position)
+    updated_history.append(new_entry)
+
+    # Keep only last 100 entries
+    if len(updated_history) > 100:
+        updated_history = updated_history[-100:]
+
+    _json_dump(CATALOG_HISTORY_FILE, updated_history)

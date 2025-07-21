@@ -59,9 +59,9 @@ const PrivateHeader = ({ userInfo }: { userInfo: User }) => {
       title: 'Findings',
       // onClick: async () => navigate('/filesystem'),
     },
-    '/inventory': {
+    '/catalog': {
       // label: 'Add New Repo',
-      title: 'Inventory',
+      title: 'AI Catalog',
       // onClick: async () => navigate('/filesystem'),
     },
     '/configuration': {
@@ -289,14 +289,14 @@ const {
               </li>
               <li>
                 <button
-                  onClick={async () => navigate('/inventory')}
-                  className={`flex w-full flex-row  px-4 py-2 text-left font-normal ${!isActive('/inventory')
+                  onClick={async () => navigate('/catalog')}
+                  className={`flex w-full flex-row  px-4 py-2 text-left font-normal ${!isActive('/catalog')
                       ? 'hover:bg-primary/20 hover:text-primaryBgText text-neutral-500'
                       : 'bg-primary text-white'
                     }`}
                 >
                   <TbTerminal2 size={24} className="mr-2" />
-                  Inventory
+                  AI Catalog
                 </button>
               </li>
               <li>

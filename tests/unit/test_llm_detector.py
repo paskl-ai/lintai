@@ -14,7 +14,7 @@ def test_llm_detector_offline(tmp_path, monkeypatch):
         )
     )
     result = subprocess.run(
-        ["lintai", "scan", str(src)], capture_output=True, text=True, check=True
+        ["lintai", "find-issues", str(src)], capture_output=True, text=True, check=True
     )
     result_obj = json.loads(result.stdout)
     findings = result_obj["findings"]

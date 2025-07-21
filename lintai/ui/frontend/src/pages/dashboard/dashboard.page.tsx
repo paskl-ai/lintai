@@ -30,11 +30,13 @@ import {
 import Spinner from '../../components/Spinner'
 import Skeleton from '../../components/skeleton/Skeleton'
 import { QueryKey } from '../../api/QueryKey'
-import { ScanService } from '../../api/services/Scan/scan.api'
+import { AnalysisService } from '../../api/services/Scan/analysis.api'
 import { useAppDispatch, useAppSelector } from '../../redux/services/store'
 import { toast } from 'react-toastify'
 import { resetJob } from '../../redux/services/ServerStatus/server.status.slice'
 import { StatCard } from '../../components/stateCard/StateCard'
+import { useNavigate } from 'react-router'
+import Pagination from '../../components/pagination/Pagination'
 
 const CustomGraph = lazy(
   async () => import('../../components/graph/CustomGraph'),
@@ -86,8 +88,18 @@ export const options = {
 
 const HistoryItem = ({ item, index }: { item: any; index: number }) => {
   const [isExpanded, setIsExpanded] = useState(false)
+const navigate=useNavigate()
+  const toggleExpand = () =>{
 
-  const toggleExpand = () => setIsExpanded(!isExpanded)
+    if(item.type == 'find_issues') {
+      setIsExpanded(!isExpanded)
+    }
+    else{
+      navigate(`/catalog/${encodeURIComponent(item?.run?.run_id)}`, { state: item });
+
+    }
+
+    }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -117,7 +129,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
     }
   }
 
-  const findingsCount = item?.report?.findings?.length || 0
+  const findingsCount = item?.report?.findings?.length || item?.report?.inventory_by_file?.length || 0
 
   return (
     <div className="border rounded-lg shadow-md bg-white mb-4 overflow-hidden">
@@ -128,7 +140,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
           {getStatusIcon(item?.run?.status)}
           <div>
             <p className="text-lg font-semibold text-gray-800 capitalize">
-              {item?.type}
+              {item?.type=='find_issues' ? 'Finding' : 'AI Catalog'}
               <span className="font-mono bg-gray-100 px-2 py-1 rounded">
                 {item?.run?.path}
               </span>
@@ -145,7 +157,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
                 ? 'bg-red-100 text-red-800'
                 : 'bg-green-100 text-green-800'
             }`}>
-            {findingsCount} Findings
+            {findingsCount} {item?.type!=='find-issues'?"Files analysed":'Findings'}
           </span>
           <button className="text-gray-500 hover:text-gray-700">
             {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
@@ -153,7 +165,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
         </div>
       </div>
 
-      {isExpanded && (
+      {isExpanded && item?.type=='find_issues' && (
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
@@ -192,7 +204,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
             <h4 className="font-semibold text-gray-700 mb-2">Findings</h4>
             {findingsCount > 0 ? (
               <div className="space-y-3">
-                {item?.report?.findings.map(
+                {item?.report?.findings?.map(
                   (finding: any, findIndex: number) => (
                     <div
                       key={findIndex}
@@ -225,7 +237,7 @@ const HistoryItem = ({ item, index }: { item: any; index: number }) => {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No findings for this scan.</p>
+              <p className="text-sm text-gray-500">No findings for this analysis.</p>
             )}
           </div>
         </div>
@@ -243,69 +255,101 @@ const Dashboard = () => {
     'hourly' | 'daily'
   >('hourly')
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
   const dispatch = useAppDispatch()
   const [expandedFiles, setExpandedFiles] = useState<string[]>([])
 
-  const { data: scans, isFetching: isFetchingScan } = useQuery({
-    queryKey: [QueryKey.JOB + 'scan'],
-    queryFn: async () => {
-      const res = await ScanService.getResults(runId!!)
-      if (res?.data) {
-        dispatch(resetJob())
-        toast.dismiss()
-      }
-      return res
-    },
-    initialData: [],
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3000 : false,
-    enabled: !!runId,
-  })
 
-  const { data: lastscan, isFetching: isFetchingLastScan } = useQuery({
-    queryKey: [QueryKey.JOB + 'last-scan'],
-    queryFn: async () => {
-      const res = await ScanService.getLastResultsByType('scan')
-      return res?.report
-    },
-    initialData: [],
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: isProcessing ? 3000 : false,
-    enabled: !scans?.data?.records,
-  })
+
+
 
   const { data: history, isFetching: isFetchingHistory } = useQuery({
     queryKey: [QueryKey.JOB + 'history'],
     queryFn: async () => {
-      const res = await ScanService.getHistory()
-      return res
+      const res = await AnalysisService.getHistory()
+      // Sort by date with latest entries at top
+      return res.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
     },
     initialData: [],
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   })
 
+  // Apply client-side pagination
+  const totalItems = history.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedHistory = history.slice(startIndex, endIndex)
+
+  const historyResponse = {
+    items: paginatedHistory,
+    total: totalItems,
+    page: currentPage,
+    limit: itemsPerPage,
+    pages: totalPages
+  }  // Calculate statistics from actual data
+  const stats = useMemo(() => {
+    let totalFindings = 0
+    let scanOperations = 0
+    let inventoryOperations = 0
+    const uniqueAIFiles = new Set<string>()
+
+    history.forEach((item: any) => {
+      // Count AI workflow files from inventory data
+      if (item?.type === 'catalog_ai') {
+        inventoryOperations++
+        if (item?.report?.inventory_by_file?.length) {
+          // Count unique files that actually have AI/ML components
+          item.report.inventory_by_file.forEach((file: any) => {
+            if (file?.components?.length > 0 || file?.frameworks?.length > 0) {
+              uniqueAIFiles.add(file.file_path)
+            }
+          })
+        }
+      }
+
+      // Count all findings from scan data
+      if (item?.type === 'find_issues') {
+        scanOperations++
+        if (item?.report?.findings?.length) {
+          totalFindings += item.report.findings.length
+        }
+      }
+    })
+
+    return {
+      totalAIWorkflowFiles: uniqueAIFiles.size,
+      totalFindings,
+      scanOperations,
+      inventoryOperations
+    }
+  }, [history])
+
   return (
     <div className="p-6 sm:ml-50 bg-gray-50 ">
       <div className="flex flex-col gap-4 md:flex-row">
-        <div className="flex-1 space-y-6 sm:w-max md:w-2/3">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+        <div className="flex-1 space-y-6 sm:w-max md:w-2/3">          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
           <StatCard
-            label="Total Files Scanned"
-            value={20}
+            label="Total AI Workflow Files"
+            value={stats.totalAIWorkflowFiles}
             // ={TbScan}
           />
           <StatCard
-            label="Findings with OWASP"
-            value={12}
-       
+            label="Total Security Findings"
+            value={stats.totalFindings}
+
           />
           <StatCard
-            label="Findings with Mitre"
-            value={6}
-   
+            label="Security Analysis"
+            value={stats.scanOperations}
+
+          />
+          <StatCard
+            label="AI Catalog Runs"
+            value={stats.inventoryOperations}
+
           />
           </div>
         </div>
@@ -327,10 +371,21 @@ const Dashboard = () => {
           </div>
         ) : (
           <div>
-            {history?.map((item: any, index: number) => (
-              <HistoryItem item={item} index={index} />
+            {paginatedHistory?.map((item: any, index: number) => (
+              <HistoryItem key={item?.run?.run_id || index} item={item} index={index} />
             ))}
           </div>
+        )}
+
+        {historyResponse && historyResponse.pages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={historyResponse.pages}
+            onPageChange={setCurrentPage}
+            totalItems={historyResponse.total}
+            itemsPerPage={itemsPerPage}
+            className="mt-4"
+          />
         )}
       </div>
     </div>
@@ -338,4 +393,3 @@ const Dashboard = () => {
 }
 
 export default Dashboard;
-

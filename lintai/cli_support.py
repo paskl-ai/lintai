@@ -69,7 +69,7 @@ def iter_python_files(root: Path, ignore_spec: pathspec.PathSpec) -> Iterable[Pa
 
 
 def maybe_load_env(env_path: Path | None) -> None:
-    """best-effort .env reader (identical logic used by scan / inventory)."""
+    """best-effort .env reader (identical logic used by find-issues / catalog-ai)."""
     if env_path is not None:
         # Explicit env file specified
         target = env_path
@@ -146,7 +146,7 @@ def build_ast_units(path: Path, ignore_spec: pathspec.PathSpec) -> List[PythonAS
 # ------------------------------------------------------------------ Typer callback
 def init_common(
     ctx: Context,
-    path: Path,
+    paths: List[Path],
     env_file: Path | None,
     log_level: str,
     ai_call_depth: int,
@@ -172,15 +172,22 @@ def init_common(
                 logger.debug(f"  {key}={value}")
         logger.debug("=== End Environment Debug ===")
 
-    if not path.exists():
-        ctx.fail(f"Path '{path}' does not exist.")
+    # Validate all paths exist
+    for path in paths:
+        if not path.exists():
+            ctx.fail(f"Path '{path}' does not exist.")
 
     maybe_load_env(env_file)
 
-    ignore_spec = _load_ignore(path)
+    # Build ignore spec based on the first path (or current directory if no paths)
+    # TODO: Consider improving this to handle ignore files from multiple directories
+    base_path = paths[0] if paths else Path.cwd()
+    ignore_spec = _load_ignore(base_path)
 
-    # AST + AI engine
-    units = build_ast_units(path, ignore_spec)
+    # AST + AI engine - collect units from all paths
+    units = []
+    for path in paths:
+        units.extend(build_ast_units(path, ignore_spec))
     _init_ai_engine(units, depth=ai_call_depth)
 
     load_plugins()
