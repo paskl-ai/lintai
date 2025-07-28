@@ -3,48 +3,52 @@ name: Build and Publish
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0
-  workflow_dispatch:  # Allow manual trigger
+      - "v*" # Triggers on version tags like v1.0.0
+  workflow_dispatch:
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: lintai/ui/frontend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: lintai/ui/frontend/package-lock.json
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-    - name: Install frontend dependencies
-      run: |
-        cd lintai/ui/frontend
-        npm ci
+      # 1️⃣ Install JS deps deterministically
+      - name: Install frontend dependencies
+        run: |
+          cd lintai/ui/frontend
+          npm ci
 
-    - name: Build frontend
-      run: |
-        cd lintai/ui/frontend
-        npm run build
+      # 2️⃣ Build via the Python helper (skips reinstall because node_modules exists)
+      - name: Build frontend
+        run: python scripts/build-frontend.py
 
-    - name: Install build tools
-      run: |
-        python -m pip install --upgrade pip
-        pip install build twine
+      # 3️⃣ Clean out any old wheels/sdists
+      - name: Clean dist directory
+        run: rm -rf dist
 
-    - name: Build Python package
-      run: python -m build
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
 
-    - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload dist/*
+      - name: Build Python package
+        run: python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
