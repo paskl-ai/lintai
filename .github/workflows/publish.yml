@@ -20,8 +20,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: npm
-          cache-dependency-path: lintai/ui/frontend/package-lock.json
+          cache: yarn
+          cache-dependency-path: lintai/ui/frontend/yarn.lock
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -31,7 +31,7 @@ jobs:
       - name: Install frontend dependencies
         run: |
           cd lintai/ui/frontend
-          npm ci
+          yarn install --frozen-lockfile
 
       - name: Build frontend
         run: python scripts/build-frontend.py

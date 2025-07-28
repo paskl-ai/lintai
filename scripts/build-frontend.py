@@ -24,11 +24,13 @@ def main():
         # Install dependencies if needed
         if not (frontend_dir / "node_modules").exists():
             print("📦 Installing dependencies...")
-            subprocess.run(["npm", "install"], cwd=frontend_dir, check=True)
+            subprocess.run(
+                ["yarn", "install", "--frozen-lockfile"], cwd=frontend_dir, check=True
+            )
 
         # Build
         print("🏗️  Building...")
-        subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True)
+        subprocess.run(["yarn", "build"], cwd=frontend_dir, check=True)
 
         print("✅ Frontend build completed!")
         print(f"📁 Built files are in: {frontend_dir / 'dist'}")
@@ -37,7 +39,7 @@ def main():
         print(f"❌ Build failed: {e}")
         sys.exit(1)
     except FileNotFoundError:
-        print("❌ npm not found. Please install Node.js and npm.")
+        print("❌ yarn not found. Please install Node.js and yarn.")
         sys.exit(1)
 
 
