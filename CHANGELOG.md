@@ -5,6 +5,35 @@ All notable changes to Lintai will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-07-28
+
+### 🔧 Infrastructure & Build Improvements
+
+### Fixed
+
+- **Version Consistency**: Fixed version mismatch between `pyproject.toml` and `lintai.__init__.__version__`
+  - Now uses `importlib.metadata` to read version from package metadata (single source of truth)
+  - CLI `--version` now correctly displays the package version
+
+### Changed
+
+- **CI/CD Pipeline Improvements**:
+  - Migrated from npm to yarn for frontend builds (100% consistency)
+  - Updated Node.js version from 18 to 20 LTS for better compatibility with react-router@7.2.0
+  - Switched to OIDC-based PyPI publishing for enhanced security (no more API tokens)
+  - Fixed GitHub Actions caching to use yarn.lock instead of package-lock.json
+
+- **Build System**:
+  - Updated `scripts/build-frontend.py` to use yarn commands throughout
+  - Added `--frozen-lockfile` flag for deterministic builds
+  - Improved error messages to reference yarn instead of npm
+
+### Technical Details
+
+- All frontend tooling now consistently uses yarn package manager
+- GitHub Actions workflow uses secure OIDC trusted publisher for PyPI releases
+- Version management simplified with automatic metadata reading
+
 ## [0.1.0] - 2025-07-20
 
 ### 🚀 Major Release - Complete Terminology Overhaul & Feature Enhancements
@@ -70,7 +99,7 @@ lintai scan examples/
 lintai ai-inventory examples/
 ```
 
-### Fixed
+### Bug Fixes
 
 - Dashboard expansion behavior for security findings
 - Frontend routing between findings and catalog pages
@@ -100,7 +129,7 @@ lintai ai-inventory examples/
 - **Budget management**: Improved token tracking and cost management
 - **API endpoints**: Enhanced REST API with better error handling and response formatting
 
-### Bug Fixes
+### Fixes
 
 - Call graph output deduplication and performance improvements
 - Frontend deployment and SPA routing
